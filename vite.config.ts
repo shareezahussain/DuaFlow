@@ -5,10 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/quran-oauth': {
+      '/api/token': {
         target: 'https://oauth2.quran.foundation',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/quran-oauth/, ''),
+        rewrite: () => '/oauth2/token',
       },
     },
   },

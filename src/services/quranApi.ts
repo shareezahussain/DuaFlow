@@ -10,7 +10,7 @@
 const CLIENT_ID     = import.meta.env.VITE_QURAN_CLIENT_ID     ?? '';
 const CLIENT_SECRET = import.meta.env.VITE_QURAN_CLIENT_SECRET ?? '';
 // Use /quran-oauth proxy to avoid CORS on the token endpoint (Vite proxies this to prelive-oauth2.quran.foundation)
-const OAUTH_URL     = import.meta.env.VITE_QURAN_OAUTH_URL     ?? '/quran-oauth/oauth2/token';
+const OAUTH_URL     = import.meta.env.VITE_QURAN_OAUTH_URL     ?? '/api/token';
 const API_BASE      = import.meta.env.VITE_QURAN_API_BASE      ?? 'https://apis.quran.foundation/content/api/v4';
 
 // Translation resource IDs
