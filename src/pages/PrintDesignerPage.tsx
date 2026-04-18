@@ -146,7 +146,7 @@ export default function PrintDesignerPage() {
   const [showSearch, setShowSearch] = useState(false)
 
   // ── Design settings from persisted store ──────────────────────────────────
-  const { design, setDesign, resetDesign } = useApp()
+  const { design, setDesign } = useApp()
   const {
     showBismillah, showNumbers,
     orientation, blockSpacing, blockBg,

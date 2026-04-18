@@ -77,7 +77,7 @@ export default function DuaDetailPage() {
   // Share panel
   const [showSharePanel, setShowSharePanel] = useState(false)
   const [pngLoading, setPngLoading] = useState(false)
-  const [shareError, setShareError] = useState<string | null>(null)
+  const shareError = null
 
   // Clean up audio on unmount or dua change
   useEffect(() => {
@@ -174,15 +174,6 @@ export default function DuaDetailPage() {
   }
 
   const progress = duration > 0 ? position / duration : 0
-
-  const handlePrint = () => {
-    const win = window.open('', '_blank')
-    if (win) {
-      win.document.write(buildPrintHtml(dua, language))
-      win.document.close()
-      setTimeout(() => { win.focus(); win.print() }, 400)
-    }
-  }
 
   const handleSharePng = async (platform: SharePlatform) => {
     setPngLoading(true)
