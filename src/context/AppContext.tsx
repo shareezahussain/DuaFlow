@@ -141,7 +141,7 @@ export const useApp = create<AppStore>()(
         set((state) => ({ design: { ...state.design, ...patch } })),
       resetDesign: () => set({ design: DEFAULT_DESIGN }),
     }),
-    { name: "rabbanas-store" }
+    { name: "duaflow-store" }
   )
 );
 

@@ -4,6 +4,7 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
 import { useApp } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
+import Footer from '../components/Footer'
 
 const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
 
@@ -48,7 +49,7 @@ function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: str
   <div class="translit">${d.transliteration}</div>
   <div class="translation">${translation}</div>
 </div>
-<div class="footer">Rabbanas — Quranic Supplications</div>
+<div class="footer">DuaFlow — Quranic Supplications</div>
 </body></html>`
 }
 
@@ -198,7 +199,7 @@ export default function DuaDetailPage() {
       )
       const file = new File([blob], `rabbana-dua-${dua.id}.png`, { type: 'image/png' })
       if (platform !== 'download' && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ title: `${dua.topic} — Rabbanas`, files: [file] })
+        await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] })
       } else if (platform === 'twitter') {
         window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${dua.topic} — Surah ${dua.surah}:${dua.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
       } else {
@@ -218,7 +219,7 @@ export default function DuaDetailPage() {
     const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm'
     const file = new File([blob], `rabbana-karaoke.${ext}`, { type: mimeType })
     if (platform !== 'download' && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ title: `${dua.topic} — Rabbanas`, files: [file] })
+      await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] })
     } else if (platform === 'twitter') {
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${dua.topic} — Surah ${dua.surah}:${dua.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
     } else {
@@ -415,7 +416,7 @@ export default function DuaDetailPage() {
         ctx.font = 'bold 20px Amiri'
         ctx.fillStyle = '#2e86c1'
         ctx.textAlign = 'center'
-        ctx.fillText('Rabbanas — Quranic Supplications', W / 2, H - 28)
+        ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - 28)
 
         // Bottom bar
         ctx.fillStyle = '#f39c12'
@@ -681,7 +682,7 @@ export default function DuaDetailPage() {
         )}
 
         {/* Prev / Next */}
-        <div className="flex gap-3 pb-8">
+        <div className="flex gap-3">
           {dua.id > 1 && (
             <Link
               to={`/dua/${dua.id - 1}`}
@@ -700,6 +701,7 @@ export default function DuaDetailPage() {
           )}
         </div>
       </main>
+      <Footer />
     </div>
   )
 }

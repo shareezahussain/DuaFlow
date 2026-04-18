@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import type { Dua } from '../data/rabbanas'
+import Footer from '../components/Footer'
 
 const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
 
@@ -81,7 +82,7 @@ export default function HomePage() {
       <header className="bg-[#1a5276] sticky top-0 z-10 shadow-md">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-white text-2xl font-bold tracking-wide">Rabbanas</h1>
+            <h1 className="text-white text-2xl font-bold tracking-wide">DuaFlow</h1>
             <p className="text-[#a9cce3] text-xs mt-0.5">Quranic Supplications</p>
           </div>
           <button
@@ -199,6 +200,8 @@ export default function HomePage() {
           </>
         )}
       </main>
+
+      <Footer />
 
       {/* Print FAB */}
       {printCollection.length > 0 && (

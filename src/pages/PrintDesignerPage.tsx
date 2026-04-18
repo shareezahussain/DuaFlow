@@ -428,7 +428,7 @@ export default function PrintDesignerPage() {
         ctx.textAlign = 'right'; ctx.fillText(fmt(audioDuration), W - 60, barY + 36)
 
         ctx.font = `bold 18px ${fontFamily}`; ctx.fillStyle = accent.v; ctx.textAlign = 'center'
-        ctx.fillText('Rabbanas — Quranic Supplications', W / 2, H - 28)
+        ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - 28)
         ctx.fillStyle = accent.v; ctx.fillRect(0, H - 8, W, 8)
 
         // Emoji overlays — drawn last so they sit on top of all content
@@ -513,7 +513,7 @@ export default function PrintDesignerPage() {
     if (!videoBlobRef.current || videoDuaId === null) return
     const file = new File([videoBlobRef.current], `rabbana-dua-${videoDuaId}-karaoke.mp4`, { type: 'video/mp4' })
     if (platform !== 'download' && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ title: 'Rabbana Karaoke', files: [file] })
+      await navigator.share({ title: 'DuaFlow Sing-Along', files: [file] })
     } else if (platform === 'twitter') {
       const d = printCollection.find(i => i.dua.id === videoDuaId)?.dua
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${d?.topic ?? ''} — Surah ${d?.surah}:${d?.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
@@ -572,14 +572,14 @@ export default function PrintDesignerPage() {
           const text = encodeURIComponent('Beautiful Quranic Supplication 🤲\n\n')
           window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(imgUrl)}`, '_blank')
         } else {
-          const desc = encodeURIComponent('Rabbana Dua — Quranic Supplication')
+          const desc = encodeURIComponent('DuaFlow — Quranic Supplication')
           window.open(`https://pinterest.com/pin/create/button/?media=${encodeURIComponent(imgUrl)}&description=${desc}`, '_blank')
         }
       } else {
         const blob = await captureAsBlob()
         const file = new File([blob], 'rabbana-dua.png', { type: 'image/png' })
         if (platform === 'instagram' && navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'Rabbana Dua', text: 'Beautiful Quranic Supplication 🤲' })
+          await navigator.share({ files: [file], title: 'DuaFlow', text: 'Beautiful Quranic Supplication 🤲' })
         } else {
           const url = URL.createObjectURL(blob)
           const a = document.createElement('a'); a.href = url; a.download = 'rabbana-dua.png'; a.click()

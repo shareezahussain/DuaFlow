@@ -1,8 +1,8 @@
-# Rabbanas — Quranic Supplications
+# DuaFlow — Quranic Supplications
 
 > Built for the [Quran Foundation Hackathon](https://launch.provisioncapital.com/quran-hackathon) — helping Muslims maintain their connection with the Quran beyond Ramadan through beautiful, accessible technology.
 
-Rabbanas is a web app for browsing, listening to, designing, and sharing all 40 Rabbana duas from the Quran. It makes these powerful supplications accessible in multiple languages, listenable with word-by-word highlights, and shareable as beautiful printable booklets or social media videos.
+DuaFlow is a web app for browsing, listening to, designing, and sharing all 40 Rabbana duas from the Quran. It makes these powerful supplications accessible in multiple languages, listenable with word-by-word highlights, and shareable as beautiful printable booklets or social media videos.
 
 ---
 
@@ -94,8 +94,8 @@ The 40 Rabbana duas are sourced from the Quran Foundation dataset, stored locall
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/rabbanas-app.git
-cd rabbanas-app
+git clone https://github.com/YOUR_USERNAME/duaflow.git
+cd duaflow
 ```
 
 ### 2. Install dependencies
