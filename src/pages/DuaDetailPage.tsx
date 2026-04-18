@@ -41,7 +41,7 @@ function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: str
   .bismillah { text-align:center; font-size:26px; color:#1a5276; margin-bottom:20px; direction:rtl; }
   .footer { text-align:center; color:#aaa; font-size:11px; margin-top:32px; border-top:1px solid #eee; padding-top:12px; }
 </style></head><body>
-<div class="cover"><h1>Dua #${d.id} — ${d.topic}</h1><h2>Surah ${d.surah}:${d.ayah}</h2></div>
+<div class="cover"><h1>${d.topic}</h1><h2>Surah ${d.surah}:${d.ayah}</h2></div>
 <div class="bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>
 <div class="block">
   <div class="ref">Surah ${d.surah}:${d.ayah} — ${d.topic}</div>
@@ -505,7 +505,7 @@ export default function DuaDetailPage() {
             ← Back
           </button>
           <div className="flex-1 text-center">
-            <p className="text-white font-bold">Dua #{dua.id}</p>
+            <p className="text-white font-bold">{dua.topic}</p>
             <p className="text-[#a9cce3] text-xs">Surah {dua.surah}:{dua.ayah}</p>
           </div>
           <button

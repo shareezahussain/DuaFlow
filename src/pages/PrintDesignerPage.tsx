@@ -148,7 +148,7 @@ export default function PrintDesignerPage() {
   // ── Design settings from persisted store ──────────────────────────────────
   const { design, setDesign } = useApp()
   const {
-    showBismillah, showNumbers,
+    showBismillah,
     orientation, blockSpacing, blockBg,
     fontSize, fontFamily, fontWeight,
     accent, arabicColor, translitColor, translationColor,
@@ -173,35 +173,55 @@ export default function PrintDesignerPage() {
     setDesign({ emojiOverlays: [...emojiOverlays, item] })
   }
 
-  function onEmojiMouseDown(e: React.MouseEvent, id: string) {
-    e.preventDefault()
-    e.stopPropagation()
+  function startDrag(clientX: number, clientY: number, id: string) {
     const o = emojiOverlays.find(o => o.id === id)
     if (!o) return
-    draggingRef.current = { id, startX: e.clientX, startY: e.clientY, origX: o.x, origY: o.y }
+    draggingRef.current = { id, startX: clientX, startY: clientY, origX: o.x, origY: o.y }
     setIsDragging(true)
   }
 
-  // Document-level drag — works even when mouse leaves the preview container or crosses the iframe
+  function onEmojiMouseDown(e: React.MouseEvent, id: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    startDrag(e.clientX, e.clientY, id)
+  }
+
+  function onEmojiTouchStart(e: React.TouchEvent, id: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    const touch = e.touches[0]
+    startDrag(touch.clientX, touch.clientY, id)
+  }
+
+  // Document-level drag — works for both mouse and touch
   useEffect(() => {
     if (!isDragging) return
-    const onMove = (e: MouseEvent) => {
+
+    const move = (clientX: number, clientY: number) => {
       if (!draggingRef.current || !emojiAreaRef.current) return
       const rect = emojiAreaRef.current.getBoundingClientRect()
-      const dx = ((e.clientX - draggingRef.current.startX) / rect.width)  * 100
-      const dy = ((e.clientY - draggingRef.current.startY) / rect.height) * 100
+      const dx = ((clientX - draggingRef.current.startX) / rect.width)  * 100
+      const dy = ((clientY - draggingRef.current.startY) / rect.height) * 100
       const nx = Math.max(0, Math.min(92, draggingRef.current.origX + dx))
       const ny = Math.max(0, Math.min(92, draggingRef.current.origY + dy))
       setDesign({
         emojiOverlays: emojiOverlays.map(o => o.id === draggingRef.current?.id ? { ...o, x: nx, y: ny } : o)
       })
     }
+
+    const onMouseMove = (e: MouseEvent) => move(e.clientX, e.clientY)
+    const onTouchMove = (e: TouchEvent) => { e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY) }
     const onUp = () => { draggingRef.current = null; setIsDragging(false) }
-    document.addEventListener('mousemove', onMove)
+
+    document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onUp)
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    document.addEventListener('touchend', onUp)
     return () => {
-      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('touchend', onUp)
     }
   }, [isDragging])
 
@@ -616,7 +636,7 @@ export default function PrintDesignerPage() {
       if (item.includeArabic)          parts.push(`<div class="arabic" dir="rtl">${dua.arabicText}</div>`)
       if (item.includeTransliteration) parts.push(`<div class="translit">${dua.transliteration}</div>`)
       if (item.includeTranslation)     parts.push(`<div class="trans">${trans}</div>`)
-      return `<div class="block">${showNumbers ? `<span class="num">${idx + 1}</span>` : ''}${parts.join('')}</div>`
+      return `<div class="block">${parts.join('')}</div>`
     }).join('')
 
     const isLandscape = orientation === 'landscape'
@@ -655,7 +675,7 @@ ${bodyItems}
 </div></body></html>`
   }
 
-  const designDeps = [printCollection, language, showBismillah, showNumbers, fontSize, fontFamily, fontWeight, accent, arabicColor, translitColor, translationColor, borderStyle, borderWidth, borderColor, borderRadius, blockAccent, orientation, blockSpacing, blockBg]
+  const designDeps = [printCollection, language, showBismillah, fontSize, fontFamily, fontWeight, accent, arabicColor, translitColor, translationColor, borderStyle, borderWidth, borderColor, borderRadius, blockAccent, orientation, blockSpacing, blockBg]
   const printDeps  = [...designDeps, emojiOverlays]
   // Preview iframe never includes emojis — the overlay spans in the designer handle them,
   // avoiding a visual duplicate while dragging.
@@ -699,10 +719,6 @@ ${bodyItems}
         <label className="flex items-center justify-between py-2 border-t border-gray-100">
           <span className="text-sm text-gray-700">Bismillah header</span>
           <input type="checkbox" checked={showBismillah} onChange={e => setDesign({ showBismillah: e.target.checked })} className="accent-[#1a5276] w-4 h-4" />
-        </label>
-        <label className="flex items-center justify-between py-2 border-t border-gray-100">
-          <span className="text-sm text-gray-700">Number the duas</span>
-          <input type="checkbox" checked={showNumbers} onChange={e => setDesign({ showNumbers: e.target.checked })} className="accent-[#1a5276] w-4 h-4" />
         </label>
       </div>
 
@@ -780,7 +796,7 @@ ${bodyItems}
       {printCollection.length > 0 && (
         <div className="bg-white rounded-xl p-3 shadow-sm">
           {sectionTitle("Emojis")}
-          <p className="text-xs text-gray-400 mb-3">Tap to add · Drag on preview · Double-tap to remove</p>
+          <p className="text-xs text-gray-400 mb-3">Tap to add · Drag on preview (touch &amp; mouse) · Double-click to remove</p>
           <div className="flex flex-wrap gap-2">
             {getTopicEmojis(printCollection.map(i => i.dua.topic)).map(emoji => (
               <button
@@ -847,7 +863,7 @@ ${bodyItems}
                   className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
                   style={{ backgroundColor: accent.v }}
                 >
-                  {dua.id}
+                  🤲
                 </span>
                 <div className="overflow-hidden">
                   <p className="text-xs font-bold text-[#1a5276] truncate">{dua.topic}</p>
@@ -869,7 +885,7 @@ ${bodyItems}
                     className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
                     style={{ backgroundColor: accent.v }}
                   >
-                    {item.dua.id}
+                    🤲
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-[#1a5276] truncate">{item.dua.topic}</p>
@@ -915,9 +931,6 @@ ${bodyItems}
           {emojiOverlays.length > 0 && (
             <span className="text-[#5d8aa8] text-xs">{emojiOverlays.length} emoji{emojiOverlays.length !== 1 ? 's' : ''}</span>
           )}
-          {printCollection.length > 0 && (
-            <span className="text-[#5d8aa8] text-xs">{printCollection.length} dua{printCollection.length !== 1 ? 's' : ''}</span>
-          )}
         </div>
       </div>
       <div className="flex-1 p-4 overflow-auto">
@@ -948,7 +961,9 @@ ${bodyItems}
                 filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
               }}
               onMouseDown={e => onEmojiMouseDown(e, item.id)}
+              onTouchStart={e => onEmojiTouchStart(e, item.id)}
               onDoubleClick={() => setDesign({ emojiOverlays: emojiOverlays.filter(o => o.id !== item.id) })}
+              onTouchEnd={e => { if (e.changedTouches.length && e.target) { /* tap to remove on long press handled by double tap */ } }}
             >
               {item.emoji}
             </span>
@@ -1018,7 +1033,7 @@ ${bodyItems}
                 className="w-full mb-3 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#1a5276]"
               >
                 {printCollection.map(i => (
-                  <option key={i.dua.id} value={i.dua.id}>#{i.dua.id} — {i.dua.topic}</option>
+                  <option key={i.dua.id} value={i.dua.id}>{i.dua.topic}</option>
                 ))}
               </select>
             ) : undefined}

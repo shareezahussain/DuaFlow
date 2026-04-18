@@ -31,9 +31,6 @@ export default function HomePage() {
       <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
         {/* Header */}
         <div className="flex items-center gap-2 mb-3">
-          <span className="w-7 h-7 rounded-full bg-[#1a5276] text-white text-xs font-bold flex items-center justify-center shrink-0">
-            {dua.id}
-          </span>
           <span className="flex-1 text-sm font-semibold text-[#1a5276] truncate">{dua.topic}</span>
           <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
             {dua.surah}:{dua.ayah}
