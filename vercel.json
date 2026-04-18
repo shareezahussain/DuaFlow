@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/quran-oauth/(.*)", "destination": "https://oauth2.quran.foundation/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
