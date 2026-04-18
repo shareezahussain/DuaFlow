@@ -628,7 +628,7 @@ export default function PrintDesignerPage() {
 
     const blockPad = blockAccent === 'full-border' ? '16px' : spacingPad
 
-    const items = printCollection.map((item, idx) => {
+    const items = printCollection.map((item) => {
       const { dua } = item
       const trans = language === 'en' ? dua.translations.en : language === 'ur' ? dua.translations.ur : dua.translations.bn
       const parts: string[] = []
