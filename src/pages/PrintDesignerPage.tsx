@@ -4,6 +4,7 @@ import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
 import { useApp, type Language, type EmojiOverlay } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
+import { sanitizeDuaFields, sanitizeSearchInput } from '../util/searchUtils'
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
@@ -104,8 +105,8 @@ function Chips<T extends string | number>({
           onClick={() => onSelect(item.v)}
           className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
             selected === item.v
-              ? 'bg-[#1a5276] border-[#1a5276] text-white'
-              : 'border-gray-300 text-gray-600 hover:border-[#1a5276]'
+              ? 'bg-navy border-navy text-white'
+              : 'border-gray-300 text-gray-600 hover:border-navy'
           }`}
         >
           {item.l}
@@ -241,6 +242,11 @@ export default function PrintDesignerPage() {
 
   const generateDesignVideo = async (duaId: number) => {
     if (videoState === 'recording') return
+    if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
+      setShareError('Video generation requires Chrome on desktop or Android. Not supported on iOS Safari.')
+      return
+    }
+    setShareError(null)
     setVideoState('recording')
     setVideoDuaId(duaId)
 
@@ -532,9 +538,12 @@ export default function PrintDesignerPage() {
   const shareDesignVideo = async (platform: SharePlatform) => {
     if (!videoBlobRef.current || videoDuaId === null) return
     const file = new File([videoBlobRef.current], `rabbana-dua-${videoDuaId}-karaoke.mp4`, { type: 'video/mp4' })
-    if (platform !== 'download' && navigator.canShare?.({ files: [file] })) {
+    // On mobile, native share handles download since <a download> doesn't work on iOS
+    if (platform !== 'twitter' && navigator.canShare?.({ files: [file] })) {
       await navigator.share({ title: 'DuaFlow Sing-Along', files: [file] })
-    } else if (platform === 'twitter') {
+      return
+    }
+    if (platform === 'twitter') {
       const d = printCollection.find(i => i.dua.id === videoDuaId)?.dua
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${d?.topic ?? ''} — Surah ${d?.surah}:${d?.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
     } else {
@@ -598,7 +607,7 @@ export default function PrintDesignerPage() {
       } else {
         const blob = await captureAsBlob()
         const file = new File([blob], 'rabbana-dua.png', { type: 'image/png' })
-        if (platform === 'instagram' && navigator.canShare?.({ files: [file] })) {
+        if (platform === 'share' && navigator.canShare?.({ files: [file] })) {
           await navigator.share({ files: [file], title: 'DuaFlow', text: 'Beautiful Quranic Supplication 🤲' })
         } else {
           const url = URL.createObjectURL(blob)
@@ -677,6 +686,8 @@ ${bodyItems}
 
   const designDeps = [printCollection, language, showBismillah, fontSize, fontFamily, fontWeight, accent, arabicColor, translitColor, translationColor, borderStyle, borderWidth, borderColor, borderRadius, blockAccent, orientation, blockSpacing, blockBg]
   const printDeps  = [...designDeps, emojiOverlays]
+
+
   // Preview iframe never includes emojis — the overlay spans in the designer handle them,
   // avoiding a visual duplicate while dragging.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -694,17 +705,25 @@ ${bodyItems}
     if (win) { win.document.write(printHtml); win.document.close(); setTimeout(() => { win.focus(); win.print() }, 400) }
   }
 
-  const filteredDuas = duas.filter(
-    d => !printCollection.find(p => p.dua.id === d.id) &&
-      (d.topic.toLowerCase().includes(search.toLowerCase()) ||
-       d.translations.en.toLowerCase().includes(search.toLowerCase()) ||
-       d.arabicText.includes(search))
-  )
+const searchTerm = sanitizeSearchInput(search);
+const printedIds = new Set(printCollection.map(p => p.dua.id));
+
+const filteredDuas = duas.filter(d => {
+  if (printedIds.has(d.id)) return false;
+
+  const { topic, translation, arabic } = sanitizeDuaFields(d);
+
+  return (
+    topic.includes(searchTerm) ||
+    translation.includes(searchTerm) ||
+    (search && arabic.includes(search))
+  );
+});
 
   // ── Helpers (stable references, not inner components) ─────────────────────
 
   const sectionTitle = (title: string) => (
-    <p className="text-xs font-extrabold text-[#1a5276] uppercase tracking-wider mb-3">{title}</p>
+    <p className="text-xs font-extrabold text-navy uppercase tracking-wider mb-3">{title}</p>
   )
   const subTitle = (title: string) => (
     <p className="text-xs text-gray-400 font-semibold mt-3 mb-1.5">{title}</p>
@@ -718,7 +737,7 @@ ${bodyItems}
         {sectionTitle("Document")}
         <label className="flex items-center justify-between py-2 border-t border-gray-100">
           <span className="text-sm text-gray-700">Bismillah header</span>
-          <input type="checkbox" checked={showBismillah} onChange={e => setDesign({ showBismillah: e.target.checked })} className="accent-[#1a5276] w-4 h-4" />
+          <input type="checkbox" checked={showBismillah} onChange={e => setDesign({ showBismillah: e.target.checked })} className="accent-navy w-4 h-4" />
         </label>
       </div>
 
@@ -798,15 +817,22 @@ ${bodyItems}
           {sectionTitle("Emojis")}
           <p className="text-xs text-gray-400 mb-3">Tap to add · Drag on preview (touch &amp; mouse) · Double-click to remove</p>
           <div className="flex flex-wrap gap-2">
-            {getTopicEmojis(printCollection.map(i => i.dua.topic)).map(emoji => (
-              <button
-                key={emoji}
-                onClick={() => addEmoji(emoji)}
-                className="text-2xl w-10 h-10 rounded-xl flex items-center justify-center hover:bg-gray-100 hover:scale-110 transition-all active:scale-95"
-              >
-                {emoji}
-              </button>
-            ))}
+            {getTopicEmojis(printCollection.map(i => i.dua.topic)).map(emoji => {
+              const isActive = emojiOverlays.some(o => o.emoji === emoji)
+              return (
+                <button
+                  key={emoji}
+                  onClick={() => addEmoji(emoji)}
+                  className={`text-2xl w-10 h-10 rounded-xl flex items-center justify-center hover:scale-110 transition-all active:scale-95 ${
+                    isActive
+                      ? 'bg-gold/20 ring-2 ring-gold'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  {emoji}
+                </button>
+              )
+            })}
           </div>
           {emojiOverlays.length > 0 && (
             <button
@@ -822,7 +848,7 @@ ${bodyItems}
       {/* Duas list */}
       <div className="bg-white rounded-xl p-3 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-extrabold text-[#1a5276] uppercase tracking-wider">
+          <p className="text-xs font-extrabold text-navy uppercase tracking-wider">
             Duas ({printCollection.length})
           </p>
           <div className="flex gap-2">
@@ -836,7 +862,7 @@ ${bodyItems}
             )}
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="text-xs text-white bg-[#1a5276] px-3 py-1 rounded-full hover:bg-[#2e86c1]"
+              className="text-xs text-white bg-navy px-3 py-1 rounded-full hover:bg-navy-light"
             >
               + Add
             </button>
@@ -851,7 +877,7 @@ ${bodyItems}
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search duas…"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#1a5276] mb-2"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-navy mb-2"
             />
             {filteredDuas.slice(0, 6).map(dua => (
               <button
@@ -866,7 +892,7 @@ ${bodyItems}
                   🤲
                 </span>
                 <div className="overflow-hidden">
-                  <p className="text-xs font-bold text-[#1a5276] truncate">{dua.topic}</p>
+                  <p className="text-xs font-bold text-navy truncate">{dua.topic}</p>
                   <p className="text-sm text-gray-600 truncate arabic">{dua.arabicText}</p>
                 </div>
               </button>
@@ -888,7 +914,7 @@ ${bodyItems}
                     🤲
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-[#1a5276] truncate">{item.dua.topic}</p>
+                    <p className="text-xs font-bold text-navy truncate">{item.dua.topic}</p>
                     <p className="text-[10px] text-gray-400">Surah {item.dua.surah}:{item.dua.ayah}</p>
                   </div>
                   <button onClick={() => removeFromPrint(item.dua.id)} className="text-red-400 font-bold text-sm hover:text-red-600">✕</button>
@@ -905,7 +931,7 @@ ${bodyItems}
                       onClick={() => updatePrintItem(item.dua.id, { [key]: !item[key] })}
                       className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
                         item[key]
-                          ? 'bg-[#1a5276] border-[#1a5276] text-white'
+                          ? 'bg-navy border-navy text-white'
                           : 'border-gray-300 text-gray-500'
                       }`}
                     >
@@ -925,8 +951,8 @@ ${bodyItems}
 
   const previewJsx = (
     <div className="flex flex-col h-full bg-[#2c2c3e]">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a2e]">
-        <p className="text-[#a9cce3] text-xs font-bold uppercase tracking-wider">Live Preview</p>
+      <div className="flex items-center justify-between px-4 py-2 bg-navy-dark">
+        <p className="text-navy-muted text-xs font-bold uppercase tracking-wider">Live Preview</p>
         <div className="flex items-center gap-3">
           {emojiOverlays.length > 0 && (
             <span className="text-[#5d8aa8] text-xs">{emojiOverlays.length} emoji{emojiOverlays.length !== 1 ? 's' : ''}</span>
@@ -974,29 +1000,29 @@ ${bodyItems}
   )
 
   return (
-    <div className="h-screen flex flex-col bg-[#f0f4f8]">
+    <div className="h-screen flex flex-col bg-surface">
       {/* Header */}
-      <header className="bg-[#1a5276] flex items-center px-4 py-3 shrink-0">
-        <button onClick={() => navigate(-1)} className="text-[#a9cce3] hover:text-white text-sm font-medium mr-3">
+      <header className="bg-navy flex items-center px-4 py-3 shrink-0">
+        <button onClick={() => navigate(-1)} className="text-navy-muted hover:text-white text-sm font-medium mr-3">
           ← Back
         </button>
         <h1 className="flex-1 text-white font-bold text-lg text-center">Print Designer</h1>
         <button
           onClick={handlePrint}
-          className="bg-[#f39c12] hover:bg-[#e67e22] text-white font-bold text-sm px-4 py-1.5 rounded-full"
+          className="bg-gold hover:bg-gold-dark text-white font-bold text-sm px-4 py-1.5 rounded-full"
         >
           🖨 Print
         </button>
       </header>
 
       {/* Mobile tab bar */}
-      <div className="flex lg:hidden bg-[#1a5276] shrink-0">
+      <div className="flex lg:hidden bg-navy shrink-0">
         {(['preview', 'design'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-              tab === t ? 'border-[#f39c12] text-white' : 'border-transparent text-[#a9cce3]'
+              tab === t ? 'border-gold text-white' : 'border-transparent text-navy-muted'
             }`}
           >
             {t === 'preview' ? '👁 Preview' : '✏️ Design'}
@@ -1030,7 +1056,7 @@ ${bodyItems}
               <select
                 value={videoDuaId ?? printCollection[0].dua.id}
                 onChange={e => { setVideoDuaId(Number(e.target.value)); setVideoState('idle'); videoBlobRef.current = null }}
-                className="w-full mb-3 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#1a5276]"
+                className="w-full mb-3 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-navy"
               >
                 {printCollection.map(i => (
                   <option key={i.dua.id} value={i.dua.id}>{i.dua.topic}</option>
@@ -1045,7 +1071,7 @@ ${bodyItems}
       <div className="flex gap-2 px-3 py-3 bg-white border-t border-gray-200 shadow-lg shrink-0">
         <button
           onClick={handlePrint}
-          className="flex-1 py-3 rounded-xl border-2 border-[#1a5276] text-[#1a5276] font-bold text-sm hover:bg-[#1a5276] hover:text-white transition-colors"
+          className="flex-1 py-3 rounded-xl border-2 border-navy text-navy font-bold text-sm hover:bg-navy hover:text-white transition-colors"
         >
           🖨 Print
         </button>
@@ -1055,13 +1081,13 @@ ${bodyItems}
             const win = window.open('', '_blank')
             if (win) { win.document.write(printHtml); win.document.close(); setTimeout(() => { win.focus(); win.print() }, 500) }
           }}
-          className="flex-1 py-3 rounded-xl border-2 border-[#1a5276] text-[#1a5276] font-bold text-sm hover:bg-[#1a5276] hover:text-white transition-colors"
+          className="flex-1 py-3 rounded-xl border-2 border-navy text-navy font-bold text-sm hover:bg-navy hover:text-white transition-colors"
         >
           ⬇ PDF
         </button>
         <button
           onClick={() => { setShowSharePanel(p => !p); setShareError(null) }}
-          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-colors ${showSharePanel ? 'bg-[#1a5276] text-white' : 'bg-[#f39c12] hover:bg-[#e67e22] text-white'}`}
+          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-colors ${showSharePanel ? 'bg-navy text-white' : 'bg-gold hover:bg-gold-dark text-white'}`}
         >
           📲 Share
         </button>

@@ -7,8 +7,7 @@
 // ── Config ────────────────────────────────────────────────────────────────────
 // Values come from .env — see .env.example for the required keys.
 
-const CLIENT_ID     = import.meta.env.VITE_QURAN_CLIENT_ID     ?? '';
-const CLIENT_SECRET = import.meta.env.VITE_QURAN_CLIENT_SECRET ?? '';
+const CLIENT_ID = import.meta.env.VITE_QURAN_CLIENT_ID ?? '';
 // Use /quran-oauth proxy to avoid CORS on the token endpoint (Vite proxies this to prelive-oauth2.quran.foundation)
 const OAUTH_URL     = import.meta.env.VITE_QURAN_OAUTH_URL     ?? '/api/token';
 const API_BASE      = import.meta.env.VITE_QURAN_API_BASE      ?? 'https://apis.quran.foundation/content/api/v4';
@@ -23,17 +22,14 @@ const TRANSLITERATION   = 57;   // Transliteration
 
 let _cachedToken: string | null = null;
 let _tokenExpiry = 0;
+const _notFound = new Set<string>();
 
 async function getToken(): Promise<string> {
   if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
 
-  const credentials = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
   const resp = await fetch(OAUTH_URL, {
     method: 'POST',
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=client_credentials&scope=content',
   });
 
@@ -70,12 +66,15 @@ function stripHtml(text: string): string {
 export async function fetchVerseContent(
   surah: number,
   ayah: number
-): Promise<VerseContent> {
+): Promise<VerseContent | null> {
+  const key = `${surah}:${ayah}`;
+  if (_notFound.has(key)) return null;
+
   const token = await getToken();
   const ids = [TRANSLATION_EN, TRANSLATION_UR, TRANSLATION_BN, TRANSLITERATION].join(',');
 
   const resp = await fetch(
-    `${API_BASE}/verses/by_key/${surah}:${ayah}?translations=${ids}&fields=text_uthmani`,
+    `${API_BASE}/verses/by_key/${key}?translations=${ids}&fields=text_uthmani`,
     {
       headers: {
         'x-auth-token': token,
@@ -83,6 +82,11 @@ export async function fetchVerseContent(
       },
     }
   );
+
+  if (resp.status === 404) {
+    _notFound.add(key);
+    return null;
+  }
 
   if (!resp.ok) {
     throw new Error(`Verse fetch failed: ${surah}:${ayah} — ${resp.status}`);

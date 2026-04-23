@@ -1,24 +1,30 @@
 /**
- * Vercel serverless function — proxies OAuth token requests to the Quran Foundation
- * auth server server-side to avoid CORS issues.
+ * Vercel serverless function — proxies content API OAuth token requests
+ * (client_credentials, scope=content) server-side to avoid CORS.
  */
+import { getQfOAuthConfig } from './config/qfOAuthConfig.js'
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const OAUTH_URL = 'https://oauth2.quran.foundation/oauth2/token'
+  const { clientId, clientSecret, authBaseUrl } = getQfOAuthConfig()
+  const tokenUrl = `${authBaseUrl}/oauth2/token`
 
-  // Vercel may auto-parse the body into an object — convert back to URL-encoded string
   let body = req.body
   if (body && typeof body === 'object') {
     body = new URLSearchParams(body).toString()
   }
 
-  const response = await fetch(OAUTH_URL, {
+  // Use Authorization header from browser if provided, otherwise use server credentials
+  const authHeader = req.headers['authorization']
+    ?? `Basic ${Buffer.from(`${clientId}:${clientSecret ?? ''}`).toString('base64')}`
+
+  const response = await fetch(tokenUrl, {
     method: 'POST',
     headers: {
-      Authorization: req.headers['authorization'],
+      Authorization:  authHeader,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body,

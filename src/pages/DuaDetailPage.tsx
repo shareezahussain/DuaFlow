@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
 import { useApp } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import Footer from '../components/Footer'
+import SignInModal from '../components/SignInModal'
+import { addBookmark, removeBookmark } from '../services/bookmarksApi'
 
 const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
 
@@ -15,6 +17,24 @@ const RECITERS = [
   { id: 'Rifai',    name: 'Hani Ar Rifai' },
   { id: 'Shuraym',  name: 'Saood Al Shuraym' },
 ]
+
+// Mapping from our reciter IDs to quran.com API recitation IDs (for word timestamps)
+const RECITATION_ID_MAP: Record<string, number> = {
+  Alafasy: 7,
+  Shatri:  8,
+  Shuraym: 9,
+}
+
+type WordTiming = { start: number; end: number }
+
+function exactWordIndex(timings: WordTiming[], t: number): number {
+  if (t <= 0) return -1
+  for (let i = 0; i < timings.length; i++) {
+    const nextStart = timings[i + 1]?.start ?? (timings[i].end + 1)
+    if (t >= timings[i].start && t < nextStart) return i
+  }
+  return -1
+}
 
 function pad(n: number, len = 3) {
   return String(n).padStart(len, '0')
@@ -56,11 +76,41 @@ function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: str
 export default function DuaDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { language, setLanguage, addToPrint, removeFromPrint, isInPrint } = useApp()
+  const { language, setLanguage, addToPrint,
+          userToken, bookmarkMap, setBookmarkMap, isBookmarked } = useApp()
   const { duas, isLoading } = useQuranContent()
 
   const dua = duas.find(d => d.id === Number(id))
-  const inPrint = dua ? isInPrint(dua.id) : false
+  const bookmarked = dua ? isBookmarked(dua.id) : false
+
+  const [showSignIn,       setShowSignIn]       = useState(false)
+  const [bookmarkLoading,  setBookmarkLoading]  = useState(false)
+
+  async function handleToggleBookmark() {
+    if (!dua) return
+    if (!userToken) { setShowSignIn(true); return }
+    setBookmarkLoading(true)
+    const key = String(dua.id)
+    try {
+      if (bookmarked) {
+        const bmId = bookmarkMap[key]
+        if (bmId) await removeBookmark(userToken, bmId).catch(() => {})
+        const updated = { ...bookmarkMap }
+        delete updated[key]
+        setBookmarkMap(updated)
+      } else {
+        try {
+          const created = await addBookmark(userToken, dua.surah, dua.ayah)
+          setBookmarkMap({ ...bookmarkMap, [key]: created.id })
+        } catch {
+          // API unavailable (e.g. bookmark scope not yet enabled) — save locally
+          setBookmarkMap({ ...bookmarkMap, [key]: 'local' })
+        }
+      }
+    } finally {
+      setBookmarkLoading(false)
+    }
+  }
 
   // Audio state
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -71,13 +121,44 @@ export default function DuaDetailPage() {
   const [duration, setDuration] = useState(0)
   const [highlightedArabic, setHighlightedArabic] = useState(-1)
   const [highlightedTranslit, setHighlightedTranslit] = useState(-1)
+  const [highlightedTranslation, setHighlightedTranslation] = useState(-1)
+  const [speed, setSpeed] = useState(1)
+  const [repeat, setRepeat] = useState(false)
+
+  const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
   const [videoState, setVideoState] = useState<'idle' | 'recording' | 'done'>('idle')
   const videoBlobRef = useRef<{ blob: Blob; mimeType: string } | null>(null)
 
   // Share panel
   const [showSharePanel, setShowSharePanel] = useState(false)
   const [pngLoading, setPngLoading] = useState(false)
-  const shareError = null
+  const [shareError, setShareError] = useState<string | null>(null)
+
+  const supportsWebCodecs = typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined'
+
+  // Word-level timestamps from quran.com API — null means use proportional fallback
+  const wordTimingsRef = useRef<WordTiming[] | null>(null)
+
+  useEffect(() => {
+    if (!dua) return
+    const recitationId = RECITATION_ID_MAP[selectedReciter]
+    if (!recitationId) { wordTimingsRef.current = null; return }
+
+    let cancelled = false
+    fetch(`https://api.quran.com/api/v4/recitations/${recitationId}/by_ayah/${dua.surah}:${dua.ayah}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        const segments: number[][] = data.audio_files?.[0]?.segments ?? []
+        if (!segments.length) { wordTimingsRef.current = null; return }
+        wordTimingsRef.current = segments
+          .sort((a, b) => a[0] - b[0])
+          .map(s => ({ start: s[1] / 1000, end: s[2] / 1000 }))
+      })
+      .catch(() => { wordTimingsRef.current = null })
+
+    return () => { cancelled = true; wordTimingsRef.current = null }
+  }, [dua?.id, selectedReciter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clean up audio on unmount or dua change
   useEffect(() => {
@@ -89,9 +170,9 @@ export default function DuaDetailPage() {
 
   if (isLoading || !dua) {
     return (
-      <div className="min-h-screen bg-[#f0f4f8] flex items-center justify-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-[#1a5276] border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-4 border-navy border-t-transparent rounded-full animate-spin" />
           <p className="text-gray-500 text-sm">Loading dua…</p>
         </div>
       </div>
@@ -100,6 +181,7 @@ export default function DuaDetailPage() {
 
   const arabicWords = dua.arabicText.split(' ').filter(w => w.trim())
   const translitWords = dua.transliteration.split(' ').filter(w => w.trim())
+  const translationWords = dua.translations[language].split(' ').filter(w => w.trim())
 
   // Compute highlighted index for any word list based on playback progress
   const wordIndexAt = (words: string[], t: number, dur: number) => {
@@ -112,6 +194,8 @@ export default function DuaDetailPage() {
     if (!audioRef.current) {
       const url = getAudioUrl(dua.surah, dua.ayah, selectedReciter)
       const audio = new Audio(url)
+      audio.playbackRate = speed
+      audio.loop = repeat
       audioRef.current = audio
       setAudioLoading(true)
 
@@ -123,13 +207,22 @@ export default function DuaDetailPage() {
         const t = audio.currentTime
         const dur = audio.duration
         setPosition(t)
-        setHighlightedArabic(wordIndexAt(arabicWords, t, dur))
-        setHighlightedTranslit(wordIndexAt(translitWords, t, dur))
+        const timings = wordTimingsRef.current
+        if (timings) {
+          const idx = exactWordIndex(timings, t)
+          setHighlightedArabic(idx)
+          setHighlightedTranslit(idx)
+        } else {
+          setHighlightedArabic(wordIndexAt(arabicWords, t, dur))
+          setHighlightedTranslit(wordIndexAt(translitWords, t, dur))
+        }
+        setHighlightedTranslation(wordIndexAt(translationWords, t, dur))
       }
       audio.onended = () => {
         setIsPlaying(false)
         setHighlightedArabic(-1)
         setHighlightedTranslit(-1)
+        setHighlightedTranslation(-1)
       }
       audio.onerror = () => {
         setAudioLoading(false)
@@ -161,11 +254,23 @@ export default function DuaDetailPage() {
     setPosition(0)
     setHighlightedArabic(-1)
     setHighlightedTranslit(-1)
+    setHighlightedTranslation(-1)
   }
 
   const switchReciter = (reciterId: string) => {
     handleStop()
     setSelectedReciter(reciterId)
+  }
+
+  const changeSpeed = (s: number) => {
+    setSpeed(s)
+    if (audioRef.current) audioRef.current.playbackRate = s
+  }
+
+  const toggleRepeat = () => {
+    const next = !repeat
+    setRepeat(next)
+    if (audioRef.current) audioRef.current.loop = next
   }
 
   const formatTime = (s: number) => {
@@ -189,7 +294,7 @@ export default function DuaDetailPage() {
         canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png', 1)
       )
       const file = new File([blob], `rabbana-dua-${dua.id}.png`, { type: 'image/png' })
-      if (platform !== 'download' && navigator.canShare?.({ files: [file] })) {
+      if (platform === 'share' && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] })
       } else if (platform === 'twitter') {
         window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${dua.topic} — Surah ${dua.surah}:${dua.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
@@ -209,9 +314,13 @@ export default function DuaDetailPage() {
     const { blob, mimeType } = videoBlobRef.current
     const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm'
     const file = new File([blob], `rabbana-karaoke.${ext}`, { type: mimeType })
-    if (platform !== 'download' && navigator.canShare?.({ files: [file] })) {
+
+    // On mobile, native share handles all platforms including download
+    if (platform !== 'twitter' && navigator.canShare?.({ files: [file] })) {
       await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] })
-    } else if (platform === 'twitter') {
+      return
+    }
+    if (platform === 'twitter') {
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${dua.topic} — Surah ${dua.surah}:${dua.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
     } else {
       const url = URL.createObjectURL(blob)
@@ -223,6 +332,11 @@ export default function DuaDetailPage() {
 
   const generateKaraokeVideo = async () => {
     if (videoState === 'recording') return
+    if (!supportsWebCodecs) {
+      setShareError('Video generation requires Chrome on desktop or Android. Not supported on iOS Safari.')
+      return
+    }
+    setShareError(null)
     setVideoState('recording')
 
     try {
@@ -248,11 +362,18 @@ export default function DuaDetailPage() {
       // ── 4. Pre-split words ────────────────────────────────────────────────────
       const aWords = dua.arabicText.split(' ').filter(w => w.trim())
       const tWords = dua.transliteration.split(' ').filter(w => w.trim())
+      const trWords = dua.translations[language].split(' ').filter(w => w.trim())
+      const videoTimings = wordTimingsRef.current
 
       // ── 5. Draw-frame helper ──────────────────────────────────────────────────
+      const propIdx = (words: string[], t: number) =>
+        t <= 0 || t >= audioDuration ? -1 : Math.min(Math.floor((t / audioDuration) * words.length), words.length - 1)
+
       const drawFrame = (t: number) => {
-        const aIdx = t <= 0 || t >= audioDuration ? -1 : Math.min(Math.floor((t / audioDuration) * aWords.length), aWords.length - 1)
-        const tIdx = t <= 0 || t >= audioDuration ? -1 : Math.min(Math.floor((t / audioDuration) * tWords.length), tWords.length - 1)
+        const wordIdx = videoTimings ? exactWordIndex(videoTimings, t) : propIdx(aWords, t)
+        const aIdx  = wordIdx
+        const tIdx  = wordIdx
+        const trIdx = propIdx(trWords, t)
 
         // Background gradient
         const grad = ctx.createLinearGradient(0, 0, 0, H)
@@ -372,6 +493,49 @@ export default function DuaDetailPage() {
             ctx.fillText(w, xCursor, tStartY + ri * tLineH)
             xCursor += ww
             tGlobalIdx++
+          })
+        })
+
+        // ── Translation (word-by-word) ────────────────────────────────────────
+        const trFontSize = 22
+        ctx.font = `${trFontSize}px Amiri`
+        ctx.direction = 'ltr'
+        ctx.textAlign = 'left'
+        const trLineH = trFontSize * 1.7
+        const trMaxW = W - 120
+
+        type TrRow = Array<{ word: string; idx: number }>
+        const trRowsW: TrRow[] = []
+        let trRowCur: TrRow = []
+        let trRowW = 0
+        trWords.forEach((w, wi) => {
+          const ww = ctx.measureText(w + ' ').width
+          if (trRowW + ww > trMaxW && trRowCur.length > 0) { trRowsW.push(trRowCur); trRowCur = []; trRowW = 0 }
+          trRowCur.push({ word: w, idx: wi }); trRowW += ww
+        })
+        if (trRowCur.length) trRowsW.push(trRowCur)
+
+        const trStartY = tStartY + tRows.length * tLineH + 32
+        ctx.font = 'bold 16px Amiri'
+        ctx.fillStyle = '#6fa8c9'
+        ctx.fillText('Translation', 60, trStartY)
+        ctx.font = `${trFontSize}px Amiri`
+
+        trRowsW.slice(0, 3).forEach((r, ri) => {
+          let xCursor = 60
+          r.forEach(({ word, idx }) => {
+            const ww = ctx.measureText(word + ' ').width
+            if (idx === trIdx) {
+              ctx.fillStyle = 'rgba(243,156,18,0.2)'
+              ctx.beginPath()
+              ctx.roundRect(xCursor - 2, trStartY + (ri + 1) * trLineH - trFontSize * 0.85, ww, trFontSize * 1.1, 4)
+              ctx.fill()
+              ctx.fillStyle = '#f39c12'
+            } else {
+              ctx.fillStyle = '#d0e8f5'
+            }
+            ctx.fillText(word, xCursor, trStartY + (ri + 1) * trLineH)
+            xCursor += ww
           })
         })
 
@@ -497,31 +661,35 @@ export default function DuaDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f4f8]">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
-      <header className="bg-[#1a5276] sticky top-0 z-10 shadow-md">
+      <header className="bg-navy sticky top-0 z-10 shadow-md">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="text-[#a9cce3] hover:text-white text-sm font-medium">
+          <button onClick={() => navigate(-1)} className="text-navy-muted hover:text-white text-sm font-medium">
             ← Back
           </button>
           <div className="flex-1 text-center">
             <p className="text-white font-bold">{dua.topic}</p>
-            <p className="text-[#a9cce3] text-xs">Surah {dua.surah}:{dua.ayah}</p>
+            <p className="text-navy-muted text-xs">Surah {dua.surah}:{dua.ayah}</p>
           </div>
           <button
-            onClick={() => inPrint ? removeFromPrint(dua.id) : addToPrint(dua)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
-              inPrint ? 'bg-[#f39c12] border-[#f39c12] text-white' : 'border-[#f39c12] text-[#f39c12] hover:bg-[#f39c12] hover:text-white'
+            onClick={handleToggleBookmark}
+            disabled={bookmarkLoading}
+            title={bookmarked ? 'Remove bookmark' : 'Bookmark this dua'}
+            className={`text-xl px-2 py-1 rounded-full transition-colors disabled:opacity-50 ${
+              bookmarked ? 'text-gold' : 'text-navy-muted hover:text-gold'
             }`}
           >
-            {inPrint ? '✓ Saved' : '🖨 Save'}
+            {bookmarkLoading
+              ? <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin align-middle" />
+              : bookmarked ? '🔖' : '🏷'}
           </button>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-5 space-y-4">
         {/* Topic badge */}
-        <span className="inline-block bg-[#1a5276] text-white text-xs font-semibold px-4 py-1.5 rounded-full">
+        <span className="inline-block bg-navy text-white text-xs font-semibold px-4 py-1.5 rounded-full">
           {dua.topic}
         </span>
 
@@ -533,7 +701,7 @@ export default function DuaDetailPage() {
               <span
                 key={i}
                 className={`inline transition-colors px-1 rounded ${
-                  highlightedArabic === i ? 'text-[#c0392b] bg-red-50' : 'text-[#1a1a2e]'
+                  highlightedArabic === i ? 'text-[#c0392b] bg-red-50' : 'text-navy-dark'
                 }`}
               >
                 {word}{' '}
@@ -567,8 +735,8 @@ export default function DuaDetailPage() {
               onClick={() => setLanguage(lang)}
               className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
                 language === lang
-                  ? 'bg-[#1a5276] border-[#1a5276] text-white font-bold'
-                  : 'border-[#1a5276] text-[#1a5276] hover:bg-[#1a5276] hover:text-white'
+                  ? 'bg-navy border-navy text-white font-bold'
+                  : 'border-navy text-navy hover:bg-navy hover:text-white'
               }`}
             >
               {LANG_LABELS[lang]}
@@ -576,10 +744,21 @@ export default function DuaDetailPage() {
           ))}
         </div>
 
-        {/* Translation */}
+        {/* Translation karaoke */}
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Translation</p>
-          <p className="text-base text-gray-800 leading-relaxed">{dua.translations[language]}</p>
+          <div className="flex flex-wrap gap-1">
+            {translationWords.map((word, i) => (
+              <span
+                key={i}
+                className={`text-base transition-colors px-0.5 rounded ${
+                  highlightedTranslation === i ? 'text-red-500 bg-red-50' : 'text-gray-800'
+                }`}
+              >
+                {word}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Audio player */}
@@ -594,8 +773,8 @@ export default function DuaDetailPage() {
                 onClick={() => switchReciter(r.id)}
                 className={`shrink-0 px-3 py-1.5 rounded-full text-xs border transition-colors ${
                   selectedReciter === r.id
-                    ? 'bg-[#1a5276] border-[#1a5276] text-white font-semibold'
-                    : 'border-gray-300 text-gray-500 hover:border-[#1a5276]'
+                    ? 'bg-navy border-navy text-white font-semibold'
+                    : 'border-gray-300 text-gray-500 hover:border-navy'
                 }`}
               >
                 {r.name}
@@ -606,7 +785,7 @@ export default function DuaDetailPage() {
           {/* Progress bar */}
           <div className="h-1.5 bg-gray-100 rounded-full mb-1 overflow-hidden">
             <div
-              className="h-full bg-[#1a5276] rounded-full transition-all"
+              className="h-full bg-navy rounded-full transition-all"
               style={{ width: `${progress * 100}%` }}
             />
           </div>
@@ -626,11 +805,32 @@ export default function DuaDetailPage() {
             <button
               onClick={handlePlay}
               disabled={audioLoading}
-              className="flex-[2] py-3 rounded-xl bg-[#f39c12] hover:bg-[#e67e22] text-white font-bold text-sm transition-colors disabled:opacity-60"
+              className="flex-[2] py-3 rounded-xl bg-gold hover:bg-gold-dark text-white font-bold text-sm transition-colors disabled:opacity-60"
             >
               {audioLoading ? (
                 <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : isPlaying ? '⏸ Pause' : '▶ Play'}
+            </button>
+          </div>
+
+          {/* Speed & Repeat */}
+          <div className="flex items-center justify-end gap-2 mt-3">
+            <select
+              value={speed}
+              onChange={e => changeSpeed(Number(e.target.value))}
+              className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-navy"
+            >
+              {SPEEDS.map(s => (
+                <option key={s} value={s}>{s}×</option>
+              ))}
+            </select>
+            <button
+              onClick={toggleRepeat}
+              className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                repeat ? 'bg-navy border-navy text-white' : 'border-gray-200 text-gray-500 hover:border-navy'
+              }`}
+            >
+              🔁 {repeat ? 'On' : 'Off'}
             </button>
           </div>
 
@@ -645,15 +845,19 @@ export default function DuaDetailPage() {
         <div className="flex gap-3">
           <button
             onClick={() => { addToPrint(dua); navigate('/print') }}
-            className="flex-1 py-4 rounded-2xl bg-[#1a1a2e] hover:bg-[#1a5276] text-white font-bold text-sm transition-colors"
+            className="flex-1 py-4 rounded-2xl bg-navy-dark hover:bg-navy text-white font-bold text-sm transition-colors"
           >
             🎨 Design &amp; Print
           </button>
           <button
             onClick={() => setShowSharePanel(p => !p)}
-            className={`flex-1 py-4 rounded-2xl font-bold text-sm transition-colors ${showSharePanel ? 'bg-[#1a5276] text-white' : 'bg-[#f39c12] hover:bg-[#e67e22] text-white'}`}
+            className={`flex-1 py-4 rounded-2xl font-bold text-sm transition-colors ${showSharePanel ? 'bg-navy text-white' : 'bg-gold hover:bg-gold-dark text-white'}`}
           >
-            📲 Share
+            <svg className="inline-block w-5 h-5 mr-1.5 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+              Share
           </button>
         </div>
 
@@ -672,27 +876,9 @@ export default function DuaDetailPage() {
           </div>
         )}
 
-        {/* Prev / Next */}
-        <div className="flex gap-3">
-          {dua.id > 1 && (
-            <Link
-              to={`/dua/${dua.id - 1}`}
-              className="flex-1 py-4 rounded-2xl bg-[#1a5276] hover:bg-[#2e86c1] text-white font-semibold text-sm text-center transition-colors"
-            >
-              ← Prev
-            </Link>
-          )}
-          {dua.id < duas.length && (
-            <Link
-              to={`/dua/${dua.id + 1}`}
-              className="flex-1 py-4 rounded-2xl bg-[#2e86c1] hover:bg-[#1a5276] text-white font-semibold text-sm text-center transition-colors"
-            >
-              Next →
-            </Link>
-          )}
-        </div>
       </main>
       <Footer />
+      {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
     </div>
   )
 }

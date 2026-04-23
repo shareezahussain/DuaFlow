@@ -41,17 +41,12 @@ export function QuranContentProvider({ children }: { children: ReactNode }) {
 
         if (cancelled) return;
 
-        const loaded: Dua[] = RABBANA_META.map((meta, i) => {
-          const content = contents[i];
-          return content
-            ? { ...meta, ...content }
-            : {
-                ...meta,
-                arabicText: '',
-                transliteration: '',
-                translations: { en: '', ur: '', bn: '' },
-              };
-        });
+        const loaded = RABBANA_META
+          .map((meta, i) => {
+            const content = contents[i];
+            return content ? { ...meta, ...content } : null;
+          })
+          .filter((d): d is Dua => d !== null);
 
         setDuas(loaded);
       } catch (e: any) {

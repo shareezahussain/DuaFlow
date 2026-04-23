@@ -5,12 +5,16 @@ export default {
     extend: {
       colors: {
         navy: {
-          DEFAULT: '#1a5276',
-          dark: '#1a1a2e',
-          light: '#2e86c1',
-          muted: '#a9cce3',
+          DEFAULT: '#2f7b7e',
+          dark:    '#1d4c4e',
+          light:   '#36b3b7',
+          muted:   '#b1f7f9',
         },
-        gold: '#f39c12',
+        gold: {
+          DEFAULT: '#f39c12',
+          dark:    '#e67e22',
+        },
+        surface: '#f0f4f8',
       },
       fontFamily: {
         arabic: ['Amiri', 'Georgia', 'serif'],
