@@ -613,7 +613,6 @@ export default function PrintDesignerPage() {
           const url = URL.createObjectURL(blob)
           const a = document.createElement('a'); a.href = url; a.download = 'rabbana-dua.png'; a.click()
           setTimeout(() => URL.revokeObjectURL(url), 1000)
-          if (platform === 'instagram') setShareError('PNG downloaded — upload it manually to Instagram')
         }
       }
     } catch { setShareError('Failed to capture or upload image') }
