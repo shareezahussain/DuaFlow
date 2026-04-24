@@ -5,6 +5,7 @@ import { useApp, type Language, type EmojiOverlay } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import { sanitizeDuaFields, sanitizeSearchInput } from '../util/searchUtils'
+import { downloadVideoFile } from '../util/downloadVideo'
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
@@ -555,23 +556,8 @@ export default function PrintDesignerPage() {
   const downloadDesignVideo = async () => {
     if (!videoBlobRef.current || videoDuaId === null) return
     const filename = `rabbana-dua-${videoDuaId}-karaoke.mp4`
-    // iOS can't download blob URLs — use share sheet so user can "Save to Files"
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    if (isIOS) {
-      const file = new File([videoBlobRef.current], filename, { type: 'video/mp4' })
-      if (navigator.canShare?.({ files: [file] })) {
-        try { await navigator.share({ title: 'DuaFlow Sing-Along', files: [file] }) } catch (e) {
-          if ((e as Error).name !== 'AbortError') setShareError('Could not save — try the "More" button instead.')
-        }
-      } else {
-        setShareError('To save on iOS, use the "More" button and choose "Save to Files".')
-      }
-      return
-    }
-    const url = URL.createObjectURL(videoBlobRef.current)
-    const a = document.createElement('a'); a.href = url; a.download = filename
-    document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 2000)
+    const err = await downloadVideoFile(videoBlobRef.current, filename, 'DuaFlow Sing-Along')
+    if (err) setShareError(err)
   }
 
   const shareDesignVideo = async (platform: SharePlatform) => {

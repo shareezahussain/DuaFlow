@@ -7,6 +7,7 @@ import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import Footer from '../components/Footer'
 import SignInModal from '../components/SignInModal'
 import { addBookmark, removeBookmark } from '../services/bookmarksApi'
+import { downloadVideoFile } from '../util/downloadVideo'
 
 const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
 
@@ -331,23 +332,8 @@ export default function DuaDetailPage() {
         }
       }
     }
-    // Direct download — iOS can't download blob URLs so use share sheet instead
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    if (isIOS) {
-      const file = new File([blob], filename, { type: mimeType })
-      if (navigator.canShare?.({ files: [file] })) {
-        try { await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] }) } catch (e) {
-          if ((e as Error).name !== 'AbortError') setShareError('Could not save — try the "More" button instead.')
-        }
-      } else {
-        setShareError('To save on iOS, use the "More" button and choose "Save to Files".')
-      }
-      return
-    }
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = filename
-    document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 2000)
+    const err = await downloadVideoFile(blob, filename, `${dua.topic} — DuaFlow`)
+    if (err) setShareError(err)
   }
 
   const generateKaraokeVideo = async () => {
