@@ -1,9 +1,11 @@
 /**
  * Downloads a video blob to the user's device.
  *
- * iOS Safari doesn't support <a download> for blob URLs, so we use the
- * Web Share API there instead (opens "Save to Files" in the share sheet).
- * All other platforms get a direct download.
+ * Mobile browsers (iOS Safari and Android Chrome) cannot reliably download
+ * blob URLs via <a download> — iOS ignores it entirely, Android Chrome navigates
+ * the page to the blob URL (video player), resetting app state on back-navigation.
+ * Both mobile platforms support the Web Share API with files, so we use that.
+ * Desktop browsers get a standard <a download> link.
  *
  * Returns an error message string if saving failed, or null on success.
  */
@@ -12,12 +14,12 @@ export async function downloadVideoFile(
   filename: string,
   shareTitle: string
 ): Promise<string | null> {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const isMobile = /iPad|iPhone|iPod|Android/i.test(navigator.userAgent)
 
-  if (isIOS) {
-    const file = new File([blob], filename, { type: 'video/mp4' })
+  if (isMobile) {
+    const file = new File([blob], filename, { type: blob.type || 'video/mp4' })
     if (!navigator.canShare?.({ files: [file] })) {
-      return 'To save on iOS, tap "More" and choose "Save to Files".'
+      return 'To save on mobile, tap "More" and choose "Save to Files" / "Save to device".'
     }
     try {
       await navigator.share({ title: shareTitle, files: [file] })

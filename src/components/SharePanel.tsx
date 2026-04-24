@@ -205,7 +205,7 @@ export default function SharePanel({
             )}
 
             <p className="mt-3 text-center text-[10px] text-gray-300">
-              On mobile the share sheet opens · On desktop the file downloads
+              Mobile: share sheet opens to save · Desktop: file downloads directly
             </p>
           </>
         )}

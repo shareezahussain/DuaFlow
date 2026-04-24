@@ -153,7 +153,7 @@ const filtered = duas.filter((d: Dua) => {
       <header className="bg-navy sticky top-0 z-10 shadow-md">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-white text-2xl font-bold tracking-wide">DuaFlow</h1>
+            <h1 className="text-white text-2xl font-bold tracking-wide"><a href="/">DuaFlow</a></h1>
             <p className="text-navy-muted text-xs mt-0.5">Quranic Supplications</p>
           </div>
           <div className="flex items-center gap-2">
