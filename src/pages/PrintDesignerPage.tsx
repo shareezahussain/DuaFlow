@@ -521,7 +521,11 @@ export default function PrintDesignerPage() {
         output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? {}),
         error: e => { encoderError = e },
       })
-      audioEncoder.configure({ codec: 'mp4a.40.2', sampleRate, numberOfChannels: numChannels, bitrate: 128_000 })
+
+      const audioConfig = { codec: 'mp4a.40.2' as const, sampleRate, numberOfChannels: numChannels, bitrate: 128_000 }
+      const audioSupport = await AudioEncoder.isConfigSupported(audioConfig)
+      if (!audioSupport.supported) throw new Error('AAC audio encoding not supported on this device')
+      audioEncoder.configure(audioConfig)
 
       const CHUNK = 1024; const totalSamples = audioBuffer.length
       const channelData: Float32Array[] = []
@@ -533,6 +537,8 @@ export default function PrintDesignerPage() {
         for (let c = 0; c < numChannels; c++) data.set(channelData[c].subarray(offset, offset + frameCount), c * frameCount)
         const ad = new AudioData({ format: 'f32-planar', sampleRate, numberOfFrames: frameCount, numberOfChannels: numChannels, timestamp, data })
         audioEncoder.encode(ad); ad.close()
+        if ((offset / CHUNK) % 128 === 127) await new Promise(res => setTimeout(res, 0))
+        if (encoderError) throw encoderError
       }
 
       const totalFrames = Math.ceil(audioDuration * FPS)
@@ -552,6 +558,7 @@ export default function PrintDesignerPage() {
       setVideoState('done')
     } catch (err) {
       console.error('Video generation failed', err)
+      setShareError(`Could not generate video: ${(err as Error).message}`)
       setVideoState('idle')
     }
   }

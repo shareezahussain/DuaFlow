@@ -622,14 +622,13 @@ export default function DuaDetailPage() {
         output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? {}),
         error: e => { encoderError = e },
       })
-      audioEncoder.configure({
-        codec: 'mp4a.40.2', // AAC-LC
-        sampleRate,
-        numberOfChannels: numChannels,
-        bitrate: 128_000,
-      })
 
       // ── 7. Encode audio in 1024-sample AAC frames ────────────────────────────
+      const audioConfig = { codec: 'mp4a.40.2' as const, sampleRate, numberOfChannels: numChannels, bitrate: 128_000 }
+      const audioSupport = await AudioEncoder.isConfigSupported(audioConfig)
+      if (!audioSupport.supported) throw new Error('AAC audio encoding not supported on this device')
+      audioEncoder.configure(audioConfig)
+
       const CHUNK = 1024
       const totalSamples = audioBuffer.length
       const channelData: Float32Array[] = []
@@ -645,6 +644,9 @@ export default function DuaDetailPage() {
         const ad = new AudioData({ format: 'f32-planar', sampleRate, numberOfFrames: frameCount, numberOfChannels: numChannels, timestamp, data })
         audioEncoder.encode(ad)
         ad.close()
+        // Yield every 128 chunks so mobile encoder queue doesn't get overwhelmed
+        if ((offset / CHUNK) % 128 === 127) await new Promise(res => setTimeout(res, 0))
+        if (encoderError) throw encoderError
       }
 
       // ── 8. Encode video frames (faster than real-time) ───────────────────────
@@ -673,6 +675,7 @@ export default function DuaDetailPage() {
       setVideoState('done')
     } catch (err) {
       console.error('Video generation failed', err)
+      setShareError(`Could not generate video: ${(err as Error).message}`)
       setVideoState('idle')
     }
   }
