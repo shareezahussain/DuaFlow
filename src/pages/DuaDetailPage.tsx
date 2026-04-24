@@ -313,18 +313,32 @@ export default function DuaDetailPage() {
     if (!videoBlobRef.current) return
     const { blob, mimeType } = videoBlobRef.current
     const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm'
-    const file = new File([blob], `rabbana-karaoke.${ext}`, { type: mimeType })
+    const filename = `rabbana-dua-${dua.id}-karaoke.${ext}`
 
-    // On mobile, native share handles all platforms including download
-    if (platform !== 'twitter' && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] })
-      return
-    }
     if (platform === 'twitter') {
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${dua.topic} — Surah ${dua.surah}:${dua.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
+      return
+    }
+    if (platform === 'share') {
+      const file = new File([blob], filename, { type: mimeType })
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] })
+          return
+        } catch (e) {
+          if ((e as Error).name === 'AbortError') return
+          // share failed — fall through to download
+        }
+      }
+    }
+    // Direct download (default for 'download' platform, or fallback for 'share')
+    const url = URL.createObjectURL(blob)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    if (isIOS) {
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
     } else {
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = `rabbana-dua-${dua.id}-karaoke.${ext}`
+      const a = document.createElement('a'); a.href = url; a.download = filename
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 2000)
     }

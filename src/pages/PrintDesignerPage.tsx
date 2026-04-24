@@ -530,25 +530,39 @@ export default function PrintDesignerPage() {
   const downloadDesignVideo = () => {
     if (!videoBlobRef.current || videoDuaId === null) return
     const url = URL.createObjectURL(videoBlobRef.current)
-    const a = document.createElement('a'); a.href = url; a.download = `rabbana-dua-${videoDuaId}-karaoke.mp4`
+    const filename = `rabbana-dua-${videoDuaId}-karaoke.mp4`
+    // iOS Safari ignores <a download> for blob URLs — open in new tab so user can save
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    if (isIOS) {
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      return
+    }
+    const a = document.createElement('a'); a.href = url; a.download = filename
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
     setTimeout(() => URL.revokeObjectURL(url), 2000)
   }
 
   const shareDesignVideo = async (platform: SharePlatform) => {
     if (!videoBlobRef.current || videoDuaId === null) return
-    const file = new File([videoBlobRef.current], `rabbana-dua-${videoDuaId}-karaoke.mp4`, { type: 'video/mp4' })
-    // On mobile, native share handles download since <a download> doesn't work on iOS
-    if (platform !== 'twitter' && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ title: 'DuaFlow Sing-Along', files: [file] })
-      return
-    }
     if (platform === 'twitter') {
       const d = printCollection.find(i => i.dua.id === videoDuaId)?.dua
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${d?.topic ?? ''} — Surah ${d?.surah}:${d?.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
-    } else {
-      downloadDesignVideo()
+      return
     }
+    if (platform === 'share') {
+      const file = new File([videoBlobRef.current], `rabbana-dua-${videoDuaId}-karaoke.mp4`, { type: 'video/mp4' })
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ title: 'DuaFlow Sing-Along', files: [file] })
+          return
+        } catch (e) {
+          if ((e as Error).name === 'AbortError') return // user cancelled
+          // share failed — fall through to download
+        }
+      }
+    }
+    downloadDesignVideo()
   }
 
   // Invalidate cached hosted URL whenever the design changes (set after printHtml useMemo below)
