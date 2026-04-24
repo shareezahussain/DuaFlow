@@ -331,17 +331,23 @@ export default function DuaDetailPage() {
         }
       }
     }
-    // Direct download (default for 'download' platform, or fallback for 'share')
-    const url = URL.createObjectURL(blob)
+    // Direct download — iOS can't download blob URLs so use share sheet instead
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
     if (isIOS) {
-      window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 5000)
-    } else {
-      const a = document.createElement('a'); a.href = url; a.download = filename
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 2000)
+      const file = new File([blob], filename, { type: mimeType })
+      if (navigator.canShare?.({ files: [file] })) {
+        try { await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] }) } catch (e) {
+          if ((e as Error).name !== 'AbortError') setShareError('Could not save — try the "More" button instead.')
+        }
+      } else {
+        setShareError('To save on iOS, use the "More" button and choose "Save to Files".')
+      }
+      return
     }
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = filename
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
   }
 
   const generateKaraokeVideo = async () => {
@@ -441,9 +447,13 @@ export default function DuaDetailPage() {
         }
         if (row.length) aRows.push(row)
 
+        // Cap rows so transliteration + translation always fit on the 1080px canvas
+        const MAX_A_ROWS = 4
+        const displayedARows = aRows.slice(0, MAX_A_ROWS)
+
         let wordGlobalIdx = 0
         const aStartY = 230
-        aRows.forEach((r, ri) => {
+        displayedARows.forEach((r, ri) => {
           // Calculate x positions RTL: start from right
           let xCursor = W - 60
           const positions: Array<{ word: string; x: number; idx: number }> = []
@@ -469,7 +479,7 @@ export default function DuaDetailPage() {
           })
         })
 
-        const aBlockH = aRows.length * aLineH
+        const aBlockH = displayedARows.length * aLineH
 
         // ── Transliteration (LTR) ─────────────────────────────────────────────
         const tFontSize = 28
@@ -489,9 +499,12 @@ export default function DuaDetailPage() {
         }
         if (tRow.length) tRows.push(tRow)
 
+        const MAX_T_ROWS = 3
+        const displayedTRows = tRows.slice(0, MAX_T_ROWS)
+
         let tGlobalIdx = 0
         const tStartY = aStartY + aBlockH + 28
-        tRows.forEach((r, ri) => {
+        displayedTRows.forEach((r, ri) => {
           let xCursor = 60
           r.forEach(w => {
             const ww = ctx.measureText(w).width + 10
@@ -529,7 +542,7 @@ export default function DuaDetailPage() {
         })
         if (trRowCur.length) trRowsW.push(trRowCur)
 
-        const trStartY = tStartY + tRows.length * tLineH + 32
+        const trStartY = tStartY + displayedTRows.length * tLineH + 32
         ctx.font = 'bold 16px Amiri'
         ctx.fillStyle = '#6fa8c9'
         ctx.fillText('Translation', 60, trStartY)

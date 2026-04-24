@@ -282,11 +282,16 @@ export default function PrintDesignerPage() {
       const aWords = dua.arabicText.split(' ').filter(w => w.trim())
       const tWords = dua.transliteration.split(' ').filter(w => w.trim())
       const trans = language === 'en' ? dua.translations.en : language === 'ur' ? dua.translations.ur : dua.translations.bn
+      const trWords = trans.split(' ').filter(w => w.trim())
+
+      const propIdx = (words: string[], t: number) =>
+        t <= 0 || t >= audioDuration ? -1 : Math.min(Math.floor((t / audioDuration) * words.length), words.length - 1)
 
       // ── Draw frame using current design colors ────────────────────────────
       const drawFrame = (t: number) => {
-        const aIdx = t <= 0 || t >= audioDuration ? -1 : Math.min(Math.floor((t / audioDuration) * aWords.length), aWords.length - 1)
-        const tIdx = t <= 0 || t >= audioDuration ? -1 : Math.min(Math.floor((t / audioDuration) * tWords.length), tWords.length - 1)
+        const aIdx  = propIdx(aWords, t)
+        const tIdx  = propIdx(tWords, t)
+        const trIdx = propIdx(trWords, t)
 
         // Background
         ctx.fillStyle = '#ffffff'
@@ -422,19 +427,39 @@ export default function PrintDesignerPage() {
 
         const tBlockH = showTranslit ? tRows.length * tLineH : 0
 
-        // Translation
+        // Translation (word-by-word highlighting)
         if (showTranslation) {
           ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
-          ctx.fillStyle = translationColor
           ctx.textAlign = 'left'; ctx.direction = 'ltr'
           const maxW = W - 180
-          const words = trans.split(' ')
-          let line = ''; let tY = tStartY + tBlockH + (showTranslit ? 20 : 0)
-          for (const w of words) {
-            const test = line ? `${line} ${w}` : w
-            if (ctx.measureText(test).width > maxW && line) { ctx.fillText(line, 90, tY); line = w; tY += fontSize * 1.6 } else { line = test }
-          }
-          if (line) ctx.fillText(line, 90, tY)
+          type TrRow = Array<{ word: string; idx: number }>
+          const trRows: TrRow[] = []
+          let trRowCur: TrRow = []; let trRowW = 0
+          trWords.forEach((w, wi) => {
+            const ww = ctx.measureText(w + ' ').width
+            if (trRowW + ww > maxW && trRowCur.length > 0) { trRows.push(trRowCur); trRowCur = []; trRowW = 0 }
+            trRowCur.push({ word: w, idx: wi }); trRowW += ww
+          })
+          if (trRowCur.length) trRows.push(trRowCur)
+
+          const trLineH = fontSize * 1.6
+          let trY = tStartY + tBlockH + (showTranslit ? 20 : 0)
+          trRows.forEach(r => {
+            let xCursor = 90
+            r.forEach(({ word, idx }) => {
+              const ww = ctx.measureText(word + ' ').width
+              if (idx === trIdx) {
+                ctx.fillStyle = accent.v + '22'
+                ctx.beginPath(); ctx.roundRect(xCursor - 2, trY - fontSize * 0.85, ww, fontSize * 1.1, 3); ctx.fill()
+                ctx.fillStyle = accent.v
+              } else {
+                ctx.fillStyle = translationColor
+              }
+              ctx.fillText(word, xCursor, trY)
+              xCursor += ww
+            })
+            trY += trLineH
+          })
         }
 
         // Progress bar
@@ -527,17 +552,23 @@ export default function PrintDesignerPage() {
     }
   }
 
-  const downloadDesignVideo = () => {
+  const downloadDesignVideo = async () => {
     if (!videoBlobRef.current || videoDuaId === null) return
-    const url = URL.createObjectURL(videoBlobRef.current)
     const filename = `rabbana-dua-${videoDuaId}-karaoke.mp4`
-    // iOS Safari ignores <a download> for blob URLs — open in new tab so user can save
+    // iOS can't download blob URLs — use share sheet so user can "Save to Files"
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
     if (isIOS) {
-      window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      const file = new File([videoBlobRef.current], filename, { type: 'video/mp4' })
+      if (navigator.canShare?.({ files: [file] })) {
+        try { await navigator.share({ title: 'DuaFlow Sing-Along', files: [file] }) } catch (e) {
+          if ((e as Error).name !== 'AbortError') setShareError('Could not save — try the "More" button instead.')
+        }
+      } else {
+        setShareError('To save on iOS, use the "More" button and choose "Save to Files".')
+      }
       return
     }
+    const url = URL.createObjectURL(videoBlobRef.current)
     const a = document.createElement('a'); a.href = url; a.download = filename
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
     setTimeout(() => URL.revokeObjectURL(url), 2000)
