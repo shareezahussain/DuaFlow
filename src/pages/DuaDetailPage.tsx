@@ -353,8 +353,10 @@ export default function DuaDetailPage() {
       const audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer)
       const audioDuration = audioBuffer.duration
 
-      // ── 2. Canvas setup ──────────────────────────────────────────────────────
-      const W = 1080, H = 1080
+      // ── 2. Canvas setup — lower res on mobile to avoid tab eviction ──────────
+      const isMobileDevice = /Android|iPad|iPhone|iPod/i.test(navigator.userAgent)
+      const W = isMobileDevice ? 720 : 1080
+      const H = W
       const canvas = document.createElement('canvas')
       canvas.width = W
       canvas.height = H
@@ -592,7 +594,7 @@ export default function DuaDetailPage() {
       }
 
       // ── 6. Set up mp4-muxer + WebCodecs encoders ────────────────────────────
-      const FPS = 30
+      const FPS = isMobileDevice ? 24 : 30
       const sampleRate = audioBuffer.sampleRate
       const numChannels = audioBuffer.numberOfChannels
 
@@ -603,21 +605,22 @@ export default function DuaDetailPage() {
         fastStart: 'in-memory',
       })
 
+      let encoderError: Error | null = null
       const videoEncoder = new VideoEncoder({
         output: (chunk, meta) => muxer.addVideoChunk(chunk, meta ?? {}),
-        error: e => { throw e },
+        error: e => { encoderError = e },
       })
       videoEncoder.configure({
         codec: 'avc1.4d0028', // H.264 High Profile level 4.0
         width: W,
         height: H,
-        bitrate: 4_000_000,
+        bitrate: isMobileDevice ? 2_000_000 : 4_000_000,
         framerate: FPS,
       })
 
       const audioEncoder = new AudioEncoder({
         output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? {}),
-        error: e => { throw e },
+        error: e => { encoderError = e },
       })
       audioEncoder.configure({
         codec: 'mp4a.40.2', // AAC-LC
@@ -660,6 +663,7 @@ export default function DuaDetailPage() {
       // ── 9. Flush, finalize, download ─────────────────────────────────────────
       await videoEncoder.flush()
       await audioEncoder.flush()
+      if (encoderError) throw encoderError
       muxer.finalize()
       await audioCtx.close()
 

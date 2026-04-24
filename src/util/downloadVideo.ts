@@ -1,11 +1,14 @@
 /**
  * Downloads a video blob to the user's device.
  *
- * Mobile browsers (iOS Safari and Android Chrome) cannot reliably download
- * blob URLs via <a download> — iOS ignores it entirely, Android Chrome navigates
- * the page to the blob URL (video player), resetting app state on back-navigation.
- * Both mobile platforms support the Web Share API with files, so we use that.
- * Desktop browsers get a standard <a download> link.
+ * Strategy:
+ *  1. Try Web Share API with files if the browser reports it can handle them.
+ *     This is required on iOS (no blob-URL download) and preferred on Android
+ *     (anchor-click navigates to a video player instead of downloading).
+ *  2. Fall back to an <a download> anchor for desktop and Android browsers
+ *     that don't support file sharing.
+ *  3. On iOS only, if the share API is unavailable, surface a help message —
+ *     there is no reliable anchor-download fallback on iOS Safari.
  *
  * Returns an error message string if saving failed, or null on success.
  */
@@ -14,22 +17,23 @@ export async function downloadVideoFile(
   filename: string,
   shareTitle: string
 ): Promise<string | null> {
-  const isMobile = /iPad|iPhone|iPod|Android/i.test(navigator.userAgent)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const file = new File([blob], filename, { type: blob.type || 'video/mp4' })
 
-  if (isMobile) {
-    const file = new File([blob], filename, { type: blob.type || 'video/mp4' })
-    if (!navigator.canShare?.({ files: [file] })) {
-      return 'To save on mobile, tap "More" and choose "Save to Files" / "Save to device".'
-    }
+  if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ title: shareTitle, files: [file] })
       return null
     } catch (e) {
       if ((e as Error).name === 'AbortError') return null
-      return 'Could not save — tap "More" and choose "Save to Files".'
+      if (isIOS) return 'Could not save — tap "More" and choose "Save to Files".'
+      // Non-iOS share failure: fall through to anchor download below
     }
+  } else if (isIOS) {
+    return 'To save on iOS, tap "More" and choose "Save to Files".'
   }
 
+  // Desktop + Android fallback: trigger a standard file download
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
