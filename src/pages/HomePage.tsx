@@ -151,12 +151,12 @@ const filtered = duas.filter((d: Dua) => {
     <div className="min-h-screen bg-surface">
       {/* Header */}
       <header className="bg-navy sticky top-0 z-10 shadow-md">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex max-[420px]:flex-col items-center max-[420px]:items-start justify-between max-[420px]:justify-start gap-0 max-[420px]:gap-[1rem]">
           <div>
             <h1 className="text-white text-2xl font-bold tracking-wide"><a href="/">DuaFlow</a></h1>
             <p className="text-navy-muted text-xs mt-0.5">Quranic Supplications</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-[420px]:flex-row-reverse">
             <button
               onClick={() => setShowPrintCart(true)}
               className="bg-navy-light hover:bg-navy text-white font-bold text-sm px-4 py-2 rounded-full transition-colors"

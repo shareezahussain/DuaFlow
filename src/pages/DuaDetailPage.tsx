@@ -695,7 +695,7 @@ export default function DuaDetailPage() {
           <button
             onClick={handleToggleBookmark}
             disabled={bookmarkLoading}
-            title={bookmarked ? 'Remove bookmark' : 'Bookmark this dua'}
+            aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this dua'}
             className={`text-xl px-2 py-1 rounded-full transition-colors disabled:opacity-50 ${
               bookmarked ? 'text-gold' : 'text-navy-muted hover:text-gold'
             }`}
@@ -704,6 +704,9 @@ export default function DuaDetailPage() {
               ? <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin align-middle" />
               : bookmarked ? '🔖' : '🏷'}
           </button>
+          <a href='/' aria-label='Home' className="text-xl inline-block w-[36px] h-[36px] align-middle px-2 py-1">
+            '🏠'
+          </a>
         </div>
       </header>
 
