@@ -688,6 +688,21 @@ export default function DuaDetailPage() {
           <button onClick={() => navigate(-1)} className="text-navy-muted hover:text-white text-sm font-medium">
             ← Back
           </button>
+          <a href='/' aria-label='Home' className="text-xl inline-block w-[24px] h-24px] align-middle px-2 py-1">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              className="w-6 h-6 text-white hover:fill-white transition"
+            >
+              <path d="M3 10.5L12 3l9 7.5" />
+              <path d="M5 10v10h14V10" />
+            </svg>
+          </a>
           <div className="flex-1 text-center">
             <p className="text-white font-bold">{dua.topic}</p>
             <p className="text-navy-muted text-xs">Surah {dua.surah}:{dua.ayah}</p>
@@ -704,9 +719,6 @@ export default function DuaDetailPage() {
               ? <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin align-middle" />
               : bookmarked ? '🔖' : '🏷'}
           </button>
-          <a href='/' aria-label='Home' className="text-xl inline-block w-[36px] h-[36px] align-middle px-2 py-1">
-            '🏠'
-          </a>
         </div>
       </header>
 
