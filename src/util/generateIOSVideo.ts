@@ -59,5 +59,5 @@ export async function generateIOSVideo(
   await ffmpeg.deleteFile('audio.mp3')
   await ffmpeg.deleteFile('output.mp4')
 
-  return new Blob([data], { type: 'video/mp4' })
+  return new Blob([data as any], { type: 'video/mp4' })
 }

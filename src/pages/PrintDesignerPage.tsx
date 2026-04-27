@@ -142,7 +142,7 @@ function ColorDots({ colors, selected, onSelect }: { colors: string[]; selected:
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function PrintDesignerPage() {
-  const navigate = useNavigate()
+
   const { printCollection, addToPrint, removeFromPrint, updatePrintItem, clearPrintCollection, language, setLanguage } = useApp()
   const { duas } = useQuranContent()
 
