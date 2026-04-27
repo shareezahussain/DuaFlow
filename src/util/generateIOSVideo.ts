@@ -1,5 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg'
-import { fetchFile } from '@ffmpeg/util'
+import { fetchFile, toBlobURL } from '@ffmpeg/util'
 import { toErrorMessage } from './errorMessage'
 
 let ffmpegInstance: FFmpeg | null = null
@@ -7,18 +7,24 @@ let ffmpegInstance: FFmpeg | null = null
 async function getFFmpeg(onProgress: (stage: string) => void): Promise<FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance
 
-  // Reset any partially-initialised instance from a previous failed attempt
   ffmpegInstance = null
 
   onProgress('Loading FFmpeg…')
   const ffmpeg = new FFmpeg()
 
   try {
-    // Served from /public/ffmpeg/ — no CDN dependency, no blob URL MIME issues
-    await ffmpeg.load({
-      coreURL: '/ffmpeg/ffmpeg-core.js',
-      wasmURL: '/ffmpeg/ffmpeg-core.wasm',
-    })
+    // toBlobURL fetches from same-origin /ffmpeg/ and wraps in a blob URL with
+    // the correct MIME type — this is required for iOS Safari's Worker loader
+    // which rejects direct path URLs for module scripts.
+    // coreURL must be a blob URL so the module Worker can import() it.
+    // wasmURL is passed separately so @ffmpeg/ffmpeg overrides locateFile —
+    // blob URLs lose their relative path context so the WASM can't be
+    // resolved automatically from import.meta.url inside the blob.
+    const [coreURL, wasmURL] = await Promise.all([
+      toBlobURL('/ffmpeg/ffmpeg-core.js', 'text/javascript'),
+      toBlobURL('/ffmpeg/ffmpeg-core.wasm', 'application/wasm'),
+    ])
+    await ffmpeg.load({ coreURL, wasmURL })
   } catch (err) {
     throw new Error(`Failed to load FFmpeg: ${toErrorMessage(err)}`)
   }
