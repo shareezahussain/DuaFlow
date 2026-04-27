@@ -388,7 +388,7 @@ export default function DuaDetailPage() {
     try {
       decoded = await decodeAudio(getAudioUrl(dua.surah, dua.ayah, selectedReciter))
     } catch (err) {
-      setShareError(`Could not load audio: ${(err as Error).message}`)
+      setShareError(`Could not load audio: ${toErrorMessage(err)}`)
       setVideoState('idle')
       return
     }

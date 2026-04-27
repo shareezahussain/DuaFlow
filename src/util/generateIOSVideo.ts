@@ -1,8 +1,6 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg'
-import { fetchFile, toBlobURL } from '@ffmpeg/util'
+import { fetchFile } from '@ffmpeg/util'
 import { toErrorMessage } from './errorMessage'
-
-const FFMPEG_CDN = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
 
 let ffmpegInstance: FFmpeg | null = null
 
@@ -12,16 +10,16 @@ async function getFFmpeg(onProgress: (stage: string) => void): Promise<FFmpeg> {
   // Reset any partially-initialised instance from a previous failed attempt
   ffmpegInstance = null
 
-  onProgress('Loading FFmpeg (one-time ~30 MB download)…')
+  onProgress('Loading FFmpeg…')
   const ffmpeg = new FFmpeg()
 
   try {
+    // Served from /public/ffmpeg/ — no CDN dependency, no blob URL MIME issues
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${FFMPEG_CDN}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${FFMPEG_CDN}/ffmpeg-core.wasm`, 'application/wasm'),
+      coreURL: '/ffmpeg/ffmpeg-core.js',
+      wasmURL: '/ffmpeg/ffmpeg-core.wasm',
     })
   } catch (err) {
-    // Leave ffmpegInstance null so the next call retries the load
     throw new Error(`Failed to load FFmpeg: ${toErrorMessage(err)}`)
   }
 

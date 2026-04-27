@@ -1,4 +1,5 @@
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
+import { toErrorMessage } from '../util/errorMessage'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -566,6 +567,6 @@ self.onmessage = async (e: MessageEvent<VideoWorkerInput>) => {
       [buffer],
     )
   } catch (err) {
-    post({ type: 'error', message: (err as Error).message })
+    post({ type: 'error', message: toErrorMessage(err) })
   }
 }

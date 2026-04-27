@@ -8,6 +8,7 @@ import { downloadVideoFile } from '../util/downloadVideo'
 import { decodeAudio } from '../util/decodeAudio'
 import { isMobileDevice, VIDEO_CANVAS_SIZE } from '../util/deviceDetect'
 import { spawnVideoWorker } from '../util/spawnVideoWorker'
+import { toErrorMessage } from '../util/errorMessage'
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
@@ -267,7 +268,7 @@ export default function PrintDesignerPage() {
     try {
       decoded = await decodeAudio(audioUrl)
     } catch (err) {
-      setShareError(`Could not load audio: ${(err as Error).message}`)
+      setShareError(`Could not load audio: ${toErrorMessage(err)}`)
       setVideoState('idle')
       return
     }
