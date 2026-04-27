@@ -544,9 +544,13 @@ self.onmessage = async (e: MessageEvent<VideoWorkerInput>) => {
     const { canvas, channelData, sampleRate, numberOfChannels, audioDuration, isMobile } = e.data
 
     post({ type: 'progress', stage: 'Loading font…' })
-    const amiri = new FontFace('Amiri', 'url(https://fonts.gstatic.com/s/amiri/v27/J7aRnpd8CGxBHpUrtLMA7w.woff2)')
-    await amiri.load()
-    ;(self as unknown as { fonts: FontFaceSet }).fonts.add(amiri)
+    try {
+      const amiri = new FontFace('Amiri', 'url(https://fonts.gstatic.com/s/amiri/v27/J7aRnpd8CGxBHpUrtLMA7w.woff2)')
+      await amiri.load()
+      ;(self as unknown as { fonts: FontFaceSet }).fonts.add(amiri)
+    } catch {
+      // Font load failed (network/CORS) — canvas will fall back to serif
+    }
 
     const ctx = canvas.getContext('2d')!
     const W = canvas.width, H = canvas.height
