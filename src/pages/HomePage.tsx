@@ -183,7 +183,7 @@ const filtered = duas.filter((d: Dua) => {
                   {showUserMenu && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setShowUserMenu(false)} />
-                      <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[180px] z-20">
+                      <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[180px] z-20 max-[420px]:left-[0.5rem]">
                         <div className="px-4 py-2 border-b border-gray-100">
                           <p className="text-xs font-semibold text-navy truncate">{userName ?? 'Signed in'}</p>
                         </div>

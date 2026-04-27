@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "gensync": "^1.0.0-beta.2",
     "html2canvas": "^1.4.1",
     "mp4-muxer": "^5.2.2",

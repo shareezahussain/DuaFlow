@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
+import HomeButton from '../components/HomeButton'
 import { useApp } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
@@ -8,6 +8,10 @@ import Footer from '../components/Footer'
 import SignInModal from '../components/SignInModal'
 import { addBookmark, removeBookmark } from '../services/bookmarksApi'
 import { downloadVideoFile } from '../util/downloadVideo'
+import { generateIOSVideo } from '../util/generateIOSVideo'
+import { decodeAudio } from '../util/decodeAudio'
+import { isIOS as deviceIsIOS, isMobileDevice, VIDEO_CANVAS_SIZE } from '../util/deviceDetect'
+import { spawnVideoWorker } from '../util/spawnVideoWorker'
 
 const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
 
@@ -128,13 +132,16 @@ export default function DuaDetailPage() {
 
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
   const [videoState, setVideoState] = useState<'idle' | 'recording' | 'done'>('idle')
+  const [encodeStage, setEncodeStage] = useState('Encoding…')
   const videoBlobRef = useRef<{ blob: Blob; mimeType: string } | null>(null)
+  const videoWorkerRef = useRef<Worker | null>(null)
 
   // Share panel
   const [showSharePanel, setShowSharePanel] = useState(false)
   const [pngLoading, setPngLoading] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
 
+  const isIOS = deviceIsIOS
   const supportsWebCodecs = typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined'
 
   // Word-level timestamps from quran.com API — null means use proportional fallback
@@ -166,6 +173,7 @@ export default function DuaDetailPage() {
     return () => {
       audioRef.current?.pause()
       audioRef.current = null
+      videoWorkerRef.current?.terminate()
     }
   }, [id])
 
@@ -338,346 +346,87 @@ export default function DuaDetailPage() {
 
   const generateKaraokeVideo = async () => {
     if (videoState === 'recording') return
-    if (!supportsWebCodecs) {
-      setShareError('Video generation requires Chrome on desktop or Android. Not supported on iOS Safari.')
-      return
-    }
     setShareError(null)
     setVideoState('recording')
+    setEncodeStage('Starting…')
 
-    try {
-      // ── 1. Load audio buffer ─────────────────────────────────────────────────
-      const audioUrl = getAudioUrl(dua.surah, dua.ayah, selectedReciter)
-      const audioArrayBuffer = await fetch(audioUrl).then(r => r.arrayBuffer())
-      const audioCtx = new AudioContext()
-      const audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer)
-      const audioDuration = audioBuffer.duration
-
-      // ── 2. Canvas setup — lower res on mobile to avoid tab eviction ──────────
-      const isMobileDevice = /Android|iPad|iPhone|iPod/i.test(navigator.userAgent)
-      const W = isMobileDevice ? 720 : 1080
-      const H = W
-      const canvas = document.createElement('canvas')
-      canvas.width = W
-      canvas.height = H
-      const ctx = canvas.getContext('2d')!
-
-      // ── 3. Load Amiri font ───────────────────────────────────────────────────
-      const font = new FontFace('Amiri', 'url(https://fonts.gstatic.com/s/amiri/v27/J7aRnpd8CGxBHpUrtLMA7w.woff2)')
-      await font.load()
-      ;(document.fonts as FontFaceSet).add(font)
-
-      // ── 4. Pre-split words ────────────────────────────────────────────────────
-      const aWords = dua.arabicText.split(' ').filter(w => w.trim())
-      const tWords = dua.transliteration.split(' ').filter(w => w.trim())
-      const trWords = dua.translations[language].split(' ').filter(w => w.trim())
-      const videoTimings = wordTimingsRef.current
-
-      // ── 5. Draw-frame helper ──────────────────────────────────────────────────
-      const propIdx = (words: string[], t: number) =>
-        t <= 0 || t >= audioDuration ? -1 : Math.min(Math.floor((t / audioDuration) * words.length), words.length - 1)
-
-      const drawFrame = (t: number) => {
-        const wordIdx = videoTimings ? exactWordIndex(videoTimings, t) : propIdx(aWords, t)
-        const aIdx  = wordIdx
-        const tIdx  = wordIdx
-        const trIdx = propIdx(trWords, t)
-
-        // Background gradient
-        const grad = ctx.createLinearGradient(0, 0, 0, H)
-        grad.addColorStop(0, '#0d1b2a')
-        grad.addColorStop(1, '#1a3a5c')
-        ctx.fillStyle = grad
-        ctx.fillRect(0, 0, W, H)
-
-        // Decorative top bar
-        ctx.fillStyle = '#f39c12'
-        ctx.fillRect(0, 0, W, 8)
-
-        // Bismillah
-        ctx.font = '52px Amiri'
-        ctx.fillStyle = '#f39c12'
-        ctx.textAlign = 'center'
-        ctx.direction = 'rtl'
-        ctx.fillText('بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ', W / 2, 90)
-
-        // Topic badge
-        ctx.font = 'bold 26px Amiri'
-        ctx.fillStyle = '#a9cce3'
-        ctx.textAlign = 'center'
-        ctx.direction = 'ltr'
-        ctx.fillText(`${dua.topic}  •  Surah ${dua.surah}:${dua.ayah}`, W / 2, 148)
-
-        // Divider
-        ctx.strokeStyle = '#2e86c1'
-        ctx.lineWidth = 1.5
-        ctx.beginPath()
-        ctx.moveTo(80, 168)
-        ctx.lineTo(W - 80, 168)
-        ctx.stroke()
-
-        // ── Arabic words (RTL, word-wrap rows) ──────────────────────────────
-        const aFontSize = 54
-        ctx.font = `${aFontSize}px Amiri`
-        ctx.direction = 'rtl'
-        const aLineH = aFontSize * 1.9
-
-        // Build rows RTL by measuring
-        type Row = string[]
-        const aRows: Row[] = []
-        let row: string[] = []
-        let rowW = 0
-        const aMaxW = W - 120
-        for (const w of aWords) {
-          const ww = ctx.measureText(w).width + 14
-          if (rowW + ww > aMaxW && row.length > 0) { aRows.push(row); row = []; rowW = 0 }
-          row.push(w); rowW += ww
-        }
-        if (row.length) aRows.push(row)
-
-        // Cap rows so transliteration + translation always fit on the 1080px canvas
-        const MAX_A_ROWS = 4
-        const displayedARows = aRows.slice(0, MAX_A_ROWS)
-
-        let wordGlobalIdx = 0
-        const aStartY = 230
-        displayedARows.forEach((r, ri) => {
-          // Calculate x positions RTL: start from right
-          let xCursor = W - 60
-          const positions: Array<{ word: string; x: number; idx: number }> = []
-          for (const w of r) {
-            const ww = ctx.measureText(w).width + 14
-            positions.push({ word: w, x: xCursor, idx: wordGlobalIdx++ })
-            xCursor -= ww
-          }
-          positions.forEach(({ word, x, idx }) => {
-            if (idx === aIdx) {
-              // Highlight pill
-              const ww = ctx.measureText(word).width + 14
-              ctx.fillStyle = 'rgba(243,156,18,0.25)'
-              ctx.beginPath()
-              ctx.roundRect(x - ww, aStartY + ri * aLineH - aFontSize * 0.85, ww, aFontSize * 1.1, 6)
-              ctx.fill()
-              ctx.fillStyle = '#f39c12'
-            } else {
-              ctx.fillStyle = '#ffffff'
-            }
-            ctx.textAlign = 'right'
-            ctx.fillText(word, x, aStartY + ri * aLineH)
-          })
-        })
-
-        const aBlockH = displayedARows.length * aLineH
-
-        // ── Transliteration (LTR) ─────────────────────────────────────────────
-        const tFontSize = 28
-        ctx.font = `italic ${tFontSize}px Amiri`
-        ctx.direction = 'ltr'
-        ctx.textAlign = 'left'
-        const tLineH = tFontSize * 1.8
-        const tMaxW = W - 120
-
-        const tRows: Row[] = []
-        let tRow: string[] = []
-        let tRowW = 0
-        for (const w of tWords) {
-          const ww = ctx.measureText(w).width + 10
-          if (tRowW + ww > tMaxW && tRow.length > 0) { tRows.push(tRow); tRow = []; tRowW = 0 }
-          tRow.push(w); tRowW += ww
-        }
-        if (tRow.length) tRows.push(tRow)
-
-        const MAX_T_ROWS = 3
-        const displayedTRows = tRows.slice(0, MAX_T_ROWS)
-
-        let tGlobalIdx = 0
-        const tStartY = aStartY + aBlockH + 28
-        displayedTRows.forEach((r, ri) => {
-          let xCursor = 60
-          r.forEach(w => {
-            const ww = ctx.measureText(w).width + 10
-            if (tGlobalIdx === tIdx) {
-              ctx.fillStyle = 'rgba(243,156,18,0.2)'
-              ctx.beginPath()
-              ctx.roundRect(xCursor - 4, tStartY + ri * tLineH - tFontSize * 0.85, ww, tFontSize * 1.1, 4)
-              ctx.fill()
-              ctx.fillStyle = '#f39c12'
-            } else {
-              ctx.fillStyle = '#a9cce3'
-            }
-            ctx.fillText(w, xCursor, tStartY + ri * tLineH)
-            xCursor += ww
-            tGlobalIdx++
-          })
-        })
-
-        // ── Translation (word-by-word) ────────────────────────────────────────
-        const trFontSize = 22
-        ctx.font = `${trFontSize}px Amiri`
-        ctx.direction = 'ltr'
-        ctx.textAlign = 'left'
-        const trLineH = trFontSize * 1.7
-        const trMaxW = W - 120
-
-        type TrRow = Array<{ word: string; idx: number }>
-        const trRowsW: TrRow[] = []
-        let trRowCur: TrRow = []
-        let trRowW = 0
-        trWords.forEach((w, wi) => {
-          const ww = ctx.measureText(w + ' ').width
-          if (trRowW + ww > trMaxW && trRowCur.length > 0) { trRowsW.push(trRowCur); trRowCur = []; trRowW = 0 }
-          trRowCur.push({ word: w, idx: wi }); trRowW += ww
-        })
-        if (trRowCur.length) trRowsW.push(trRowCur)
-
-        const trStartY = tStartY + displayedTRows.length * tLineH + 32
-        ctx.font = 'bold 16px Amiri'
-        ctx.fillStyle = '#6fa8c9'
-        ctx.fillText('Translation', 60, trStartY)
-        ctx.font = `${trFontSize}px Amiri`
-
-        trRowsW.slice(0, 3).forEach((r, ri) => {
-          let xCursor = 60
-          r.forEach(({ word, idx }) => {
-            const ww = ctx.measureText(word + ' ').width
-            if (idx === trIdx) {
-              ctx.fillStyle = 'rgba(243,156,18,0.2)'
-              ctx.beginPath()
-              ctx.roundRect(xCursor - 2, trStartY + (ri + 1) * trLineH - trFontSize * 0.85, ww, trFontSize * 1.1, 4)
-              ctx.fill()
-              ctx.fillStyle = '#f39c12'
-            } else {
-              ctx.fillStyle = '#d0e8f5'
-            }
-            ctx.fillText(word, xCursor, trStartY + (ri + 1) * trLineH)
-            xCursor += ww
-          })
-        })
-
-        // ── Progress bar ──────────────────────────────────────────────────────
-        const prog = audioDuration > 0 ? t / audioDuration : 0
-        const barY = H - 90
-        ctx.fillStyle = '#1e3a5f'
-        ctx.beginPath()
-        ctx.roundRect(60, barY, W - 120, 10, 5)
-        ctx.fill()
-        if (prog > 0) {
-          ctx.fillStyle = '#f39c12'
-          ctx.beginPath()
-          ctx.roundRect(60, barY, (W - 120) * prog, 10, 5)
-          ctx.fill()
-          // dot
-          ctx.beginPath()
-          ctx.arc(60 + (W - 120) * prog, barY + 5, 8, 0, Math.PI * 2)
-          ctx.fill()
-        }
-
-        // Time
-        const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-        ctx.font = '24px Amiri'
-        ctx.fillStyle = '#a9cce3'
-        ctx.direction = 'ltr'
-        ctx.textAlign = 'left'
-        ctx.fillText(fmt(t), 60, barY + 38)
-        ctx.textAlign = 'right'
-        ctx.fillText(fmt(audioDuration), W - 60, barY + 38)
-
-        // Branding
-        ctx.font = 'bold 20px Amiri'
-        ctx.fillStyle = '#2e86c1'
-        ctx.textAlign = 'center'
-        ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - 28)
-
-        // Bottom bar
-        ctx.fillStyle = '#f39c12'
-        ctx.fillRect(0, H - 8, W, 8)
+    // ── iOS path: FFmpeg.wasm static card + audio ────────────────────────────
+    if (isIOS) {
+      try {
+        const audioUrl = getAudioUrl(dua.surah, dua.ayah, selectedReciter)
+        const h2c = (await import('html2canvas')).default
+        const div = document.createElement('div')
+        div.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;background:#fff;'
+        div.innerHTML = buildPrintHtml(dua, language)
+        document.body.appendChild(div)
+        const canvas = await h2c(div, { scale: 1, useCORS: true, backgroundColor: '#fff', width: 700 })
+        document.body.removeChild(div)
+        const frameBlob = await new Promise<Blob>((res, rej) =>
+          canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png', 0.9)
+        )
+        const blob = await generateIOSVideo(frameBlob, audioUrl, setEncodeStage)
+        videoBlobRef.current = { blob, mimeType: 'video/mp4' }
+        setVideoState('done')
+      } catch (err) {
+        console.error('iOS video generation failed', err)
+        setShareError(`Could not generate video: ${(err as Error).message}`)
+        setVideoState('idle')
       }
-
-      // ── 6. Set up mp4-muxer + WebCodecs encoders ────────────────────────────
-      const FPS = isMobileDevice ? 24 : 30
-      const sampleRate = audioBuffer.sampleRate
-      const numChannels = audioBuffer.numberOfChannels
-
-      const muxer = new Muxer({
-        target: new ArrayBufferTarget(),
-        video: { codec: 'avc', width: W, height: H },
-        audio: { codec: 'aac', sampleRate, numberOfChannels: numChannels },
-        fastStart: 'in-memory',
-      })
-
-      let encoderError: Error | null = null
-      const videoEncoder = new VideoEncoder({
-        output: (chunk, meta) => muxer.addVideoChunk(chunk, meta ?? {}),
-        error: e => { encoderError = e },
-      })
-      videoEncoder.configure({
-        codec: 'avc1.4d0028', // H.264 High Profile level 4.0
-        width: W,
-        height: H,
-        bitrate: isMobileDevice ? 2_000_000 : 4_000_000,
-        framerate: FPS,
-      })
-
-      const audioEncoder = new AudioEncoder({
-        output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? {}),
-        error: e => { encoderError = e },
-      })
-
-      // ── 7. Encode audio in 1024-sample AAC frames ────────────────────────────
-      const audioConfig = { codec: 'mp4a.40.2' as const, sampleRate, numberOfChannels: numChannels, bitrate: 128_000 }
-      const audioSupport = await AudioEncoder.isConfigSupported(audioConfig)
-      if (!audioSupport.supported) throw new Error('AAC audio encoding not supported on this device')
-      audioEncoder.configure(audioConfig)
-
-      const CHUNK = 1024
-      const totalSamples = audioBuffer.length
-      const channelData: Float32Array[] = []
-      for (let c = 0; c < numChannels; c++) channelData.push(audioBuffer.getChannelData(c))
-
-      for (let offset = 0; offset < totalSamples; offset += CHUNK) {
-        const frameCount = Math.min(CHUNK, totalSamples - offset)
-        const timestamp = Math.round((offset / sampleRate) * 1_000_000)
-        const data = new Float32Array(numChannels * frameCount)
-        for (let c = 0; c < numChannels; c++) {
-          data.set(channelData[c].subarray(offset, offset + frameCount), c * frameCount)
-        }
-        const ad = new AudioData({ format: 'f32-planar', sampleRate, numberOfFrames: frameCount, numberOfChannels: numChannels, timestamp, data })
-        audioEncoder.encode(ad)
-        ad.close()
-        // Yield every 128 chunks so mobile encoder queue doesn't get overwhelmed
-        if ((offset / CHUNK) % 128 === 127) await new Promise(res => setTimeout(res, 0))
-        if (encoderError) throw encoderError
-      }
-
-      // ── 8. Encode video frames (faster than real-time) ───────────────────────
-      const totalFrames = Math.ceil(audioDuration * FPS)
-      for (let i = 0; i <= totalFrames; i++) {
-        const t = i / FPS
-        drawFrame(Math.min(t, audioDuration))
-        const timestamp = Math.round(t * 1_000_000)
-        const vf = new VideoFrame(canvas, { timestamp, duration: Math.round(1_000_000 / FPS) })
-        videoEncoder.encode(vf, { keyFrame: i % (FPS * 2) === 0 })
-        vf.close()
-        // Yield every 60 frames so the UI stays responsive
-        if (i % 60 === 0) await new Promise(res => setTimeout(res, 0))
-      }
-
-      // ── 9. Flush, finalize, download ─────────────────────────────────────────
-      await videoEncoder.flush()
-      await audioEncoder.flush()
-      if (encoderError) throw encoderError
-      muxer.finalize()
-      await audioCtx.close()
-
-      const buffer = (muxer.target as ArrayBufferTarget).buffer
-      const blob = new Blob([buffer], { type: 'video/mp4' })
-      videoBlobRef.current = { blob, mimeType: 'video/mp4' }
-      setVideoState('done')
-    } catch (err) {
-      console.error('Video generation failed', err)
-      setShareError(`Could not generate video: ${(err as Error).message}`)
-      setVideoState('idle')
+      return
     }
+
+    // ── WebCodecs path: Android / desktop ────────────────────────────────────
+    if (!supportsWebCodecs) {
+      setShareError('Video generation is not supported on this browser.')
+      setVideoState('idle')
+      return
+    }
+    setEncodeStage('Fetching audio…')
+
+    let decoded: import('../util/decodeAudio').DecodedAudio
+    try {
+      decoded = await decodeAudio(getAudioUrl(dua.surah, dua.ayah, selectedReciter))
+    } catch (err) {
+      setShareError(`Could not load audio: ${(err as Error).message}`)
+      setVideoState('idle')
+      return
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = VIDEO_CANVAS_SIZE; canvas.height = VIDEO_CANVAS_SIZE
+    const offscreen = canvas.transferControlToOffscreen()
+
+    spawnVideoWorker(
+      {
+        mode: 'karaoke',
+        canvas: offscreen,
+        channelData: decoded.channelData,
+        sampleRate: decoded.sampleRate,
+        numberOfChannels: decoded.numberOfChannels,
+        audioDuration: decoded.audioDuration,
+        isMobile: isMobileDevice,
+        arabicText: dua.arabicText,
+        transliteration: dua.transliteration,
+        translation: dua.translations[language],
+        topic: dua.topic,
+        surah: dua.surah,
+        ayah: dua.ayah,
+        wordTimings: wordTimingsRef.current,
+      },
+      [offscreen, ...decoded.channelData.map(c => c.buffer)],
+      {
+        workerRef: videoWorkerRef,
+        onDone: (buffer) => {
+          videoBlobRef.current = { blob: new Blob([buffer], { type: 'video/mp4' }), mimeType: 'video/mp4' }
+          setVideoState('done')
+        },
+        onError: (msg) => {
+          setShareError(`Could not generate video: ${msg}`)
+          setVideoState('idle')
+        },
+        onProgress: setEncodeStage,
+      },
+    )
   }
 
   return (
@@ -685,24 +434,8 @@ export default function DuaDetailPage() {
       {/* Header */}
       <header className="bg-navy sticky top-0 z-10 shadow-md">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="text-navy-muted hover:text-white text-sm font-medium">
-            ← Back
-          </button>
-          <a href='/' aria-label='Home' className="text-xl inline-block w-[24px] h-24px] align-middle px-2 py-1">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              className="w-6 h-6 text-white hover:fill-white transition"
-            >
-              <path d="M3 10.5L12 3l9 7.5" />
-              <path d="M5 10v10h14V10" />
-            </svg>
-          </a>
+
+          <HomeButton />
           <div className="flex-1 text-center">
             <p className="text-white font-bold">{dua.topic}</p>
             <p className="text-navy-muted text-xs">Surah {dua.surah}:{dua.ayah}</p>
@@ -901,9 +634,11 @@ export default function DuaDetailPage() {
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <SharePanel
               error={shareError}
+              isIOS={isIOS}
               onShareImage={handleSharePng}
               imageLoading={pngLoading}
               videoState={videoState}
+              encodeStage={encodeStage}
               onGenerateVideo={generateKaraokeVideo}
               onShareVideo={handleShareVideo}
               onResetVideo={() => { setVideoState('idle'); videoBlobRef.current = null }}

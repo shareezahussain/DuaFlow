@@ -73,6 +73,10 @@ interface SharePanelProps {
   onClose?: () => void
   /** Error message shown above the active tab content (e.g. imgBB upload failure). */
   error?: string | null
+  /** Stage label forwarded from the video worker's progress messages. */
+  encodeStage?: string
+  /** True when the device is iOS — shows disclaimer and adjusts button label. */
+  isIOS?: boolean
 
   // Image tab
   onShareImage: (platform: SharePlatform) => void
@@ -92,6 +96,8 @@ interface SharePanelProps {
 export default function SharePanel({
   onClose,
   error,
+  encodeStage = 'Encoding…',
+  isIOS = false,
   onShareImage,
   imageLoading = false,
   videoState,
@@ -166,20 +172,29 @@ export default function SharePanel({
           <>
             {videoPicker}
 
+            {isIOS && videoState === 'idle' && (
+              <div className="mb-3 px-3 py-2.5 bg-amber-50 border border-amber-100 rounded-xl">
+                <p className="text-xs text-amber-800 font-semibold mb-0.5">iOS limitation</p>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  Your device will receive a <strong>static card + audio</strong> video — karaoke animation is not available on iOS Safari. For the full karaoke experience, open this page on a Mac or Android device.
+                </p>
+              </div>
+            )}
+
             {videoState === 'idle' && (
               <button
                 onClick={onGenerateVideo}
                 className="w-full py-2.5 rounded-xl bg-navy hover:bg-navy-light text-white font-bold text-sm transition-colors"
               >
-                🎬 Generate Sing-Along
+                {isIOS ? '🎬 Generate Video (Static)' : '🎬 Generate Sing-Along'}
               </button>
             )}
 
             {videoState === 'recording' && (
               <div className="flex flex-col items-center gap-2 py-3">
                 <span className="w-6 h-6 border-2 border-navy border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-gray-500 font-medium">Encoding video…</span>
-                <span className="text-xs text-gray-400">Usually takes 5–15 seconds</span>
+                <span className="text-sm text-gray-500 font-medium">{encodeStage}</span>
+                <span className="text-xs text-gray-400">May take longer on mobile</span>
               </div>
             )}
 

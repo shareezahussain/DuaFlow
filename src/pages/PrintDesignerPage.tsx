@@ -1,11 +1,14 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
+import HomeButton from '../components/HomeButton'
 import { useApp, type Language, type EmojiOverlay } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import { sanitizeDuaFields, sanitizeSearchInput } from '../util/searchUtils'
 import { downloadVideoFile } from '../util/downloadVideo'
+import { decodeAudio } from '../util/decodeAudio'
+import { isMobileDevice, VIDEO_CANVAS_SIZE } from '../util/deviceDetect'
+import { spawnVideoWorker } from '../util/spawnVideoWorker'
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
@@ -238,8 +241,10 @@ export default function PrintDesignerPage() {
   // ── Video generation ───────────────────────────────────────────────────────
 
   const [videoState, setVideoState] = useState<'idle' | 'recording' | 'done'>('idle')
+  const [encodeStage, setEncodeStage] = useState('Encoding…')
   const [videoDuaId, setVideoDuaId] = useState<number | null>(null)
   const videoBlobRef = useRef<Blob | null>(null)
+  const videoWorkerRef = useRef<Worker | null>(null)
 
   const generateDesignVideo = async (duaId: number) => {
     if (videoState === 'recording') return
@@ -249,318 +254,78 @@ export default function PrintDesignerPage() {
     }
     setShareError(null)
     setVideoState('recording')
+    setEncodeStage('Starting…')
     setVideoDuaId(duaId)
 
+    const item = printCollection.find(i => i.dua.id === duaId)
+    if (!item) { setShareError('Dua not in collection'); setVideoState('idle'); return }
+    const dua = item.dua
+
+    function pad(n: number) { return String(n).padStart(3, '0') }
+    const audioUrl = `https://verses.quran.com/Alafasy/mp3/${pad(dua.surah)}${pad(dua.ayah)}.mp3`
+    const trans = language === 'en' ? dua.translations.en : language === 'ur' ? dua.translations.ur : dua.translations.bn
+
+    let decoded: import('../util/decodeAudio').DecodedAudio
     try {
-      const item = printCollection.find(i => i.dua.id === duaId)
-      if (!item) throw new Error('Dua not in collection')
-      const dua = item.dua
-
-      // ── Audio ──────────────────────────────────────────────────────────────
-      function pad(n: number) { return String(n).padStart(3, '0') }
-      const audioUrl = `https://verses.quran.com/Alafasy/mp3/${pad(dua.surah)}${pad(dua.ayah)}.mp3`
-      const audioCtx = new AudioContext()
-      const audioBuffer = await audioCtx.decodeAudioData(await fetch(audioUrl).then(r => r.arrayBuffer()))
-      const audioDuration = audioBuffer.duration
-
-      // ── Canvas — lower res on mobile to avoid tab eviction ────────────────
-      const isMobileDevice = /Android|iPad|iPhone|iPod/i.test(navigator.userAgent)
-      const W = isMobileDevice ? 720 : 1080, H = W
-      const canvas = document.createElement('canvas')
-      canvas.width = W; canvas.height = H
-      const ctx = canvas.getContext('2d')!
-
-      // ── Font ───────────────────────────────────────────────────────────────
-      const font = new FontFace('Amiri', 'url(https://fonts.gstatic.com/s/amiri/v27/J7aRnpd8CGxBHpUrtLMA7w.woff2)')
-      await font.load()
-      ;(document.fonts as FontFaceSet).add(font)
-
-      // ── Per-dua include toggles (respect design panel settings) ──────────────
-      const showArabic      = item.includeArabic
-      const showTranslit    = item.includeTransliteration
-      const showTranslation = item.includeTranslation
-
-      // ── Words ──────────────────────────────────────────────────────────────
-      const aWords = dua.arabicText.split(' ').filter(w => w.trim())
-      const tWords = dua.transliteration.split(' ').filter(w => w.trim())
-      const trans = language === 'en' ? dua.translations.en : language === 'ur' ? dua.translations.ur : dua.translations.bn
-      const trWords = trans.split(' ').filter(w => w.trim())
-
-      const propIdx = (words: string[], t: number) =>
-        t <= 0 || t >= audioDuration ? -1 : Math.min(Math.floor((t / audioDuration) * words.length), words.length - 1)
-
-      // ── Draw frame using current design colors ────────────────────────────
-      const drawFrame = (t: number) => {
-        const aIdx  = propIdx(aWords, t)
-        const tIdx  = propIdx(tWords, t)
-        const trIdx = propIdx(trWords, t)
-
-        // Background
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, W, H)
-
-        // Top accent bar
-        ctx.fillStyle = accent.v
-        ctx.fillRect(0, 0, W, 12)
-
-        // Cover band
-        ctx.fillStyle = accent.v
-        ctx.fillRect(0, 12, W, 160)
-        ctx.font = `bold 32px ${fontFamily}`
-        ctx.fillStyle = accent.t
-        ctx.textAlign = 'center'
-        ctx.direction = 'ltr'
-        ctx.fillText(dua.topic, W / 2, 80)
-        ctx.font = `22px ${fontFamily}`
-        ctx.fillStyle = accent.t
-        ctx.globalAlpha = 0.8
-        ctx.fillText(`Surah ${dua.surah}:${dua.ayah}`, W / 2, 118)
-        ctx.globalAlpha = 1
-
-        // Bismillah
-        if (showBismillah) {
-          ctx.font = '48px Amiri'
-          ctx.fillStyle = accent.v
-          ctx.textAlign = 'center'
-          ctx.direction = 'rtl'
-          ctx.fillText('بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ', W / 2, 240)
-        }
-
-        const contentTop = showBismillah ? 280 : 200
-
-        // Block background
-        ctx.fillStyle = blockBg
-        ctx.beginPath()
-        ctx.roundRect(60, contentTop, W - 120, 600, borderRadius)
-        ctx.fill()
-
-        // Block accent bar (respects borderStyle and blockAccent settings)
-        if (borderStyle !== 'none' && blockAccent !== 'none') {
-          if (blockAccent === 'left-bar') {
-            ctx.fillStyle = borderColor
-            ctx.fillRect(60, contentTop, borderWidth * 2, 600)
-          } else if (blockAccent === 'top-bar') {
-            ctx.fillStyle = borderColor
-            ctx.fillRect(60, contentTop, W - 120, borderWidth * 2)
-          } else if (blockAccent === 'full-border') {
-            ctx.strokeStyle = borderColor
-            ctx.lineWidth = borderWidth
-            if (borderStyle === 'dashed') ctx.setLineDash([borderWidth * 5, borderWidth * 3])
-            else if (borderStyle === 'dotted') ctx.setLineDash([borderWidth * 2, borderWidth * 2])
-            else ctx.setLineDash([])
-            ctx.beginPath()
-            ctx.roundRect(60, contentTop, W - 120, 600, borderRadius)
-            ctx.stroke()
-            ctx.setLineDash([])
-          }
-        }
-
-        // Arabic words
-        type Row = string[]
-        const aFontSize = fontSize + 20
-        ctx.font = `${fontWeight} ${aFontSize}px Amiri`
-        ctx.direction = 'rtl'
-        const aLineH = aFontSize * 1.9
-        const aMaxW = W - 180
-        const aStartY = contentTop + 60
-
-        const aRows: Row[] = []
-        let aRow: string[] = []; let aRowW = 0
-        for (const w of aWords) {
-          const ww = ctx.measureText(w).width + 14
-          if (aRowW + ww > aMaxW && aRow.length > 0) { aRows.push(aRow); aRow = []; aRowW = 0 }
-          aRow.push(w); aRowW += ww
-        }
-        if (aRow.length) aRows.push(aRow)
-
-        if (showArabic) {
-          let aGlobalIdx = 0
-          aRows.forEach((r, ri) => {
-            let xCursor = W - 90
-            const pos: Array<{ word: string; x: number; idx: number }> = []
-            for (const w of r) { const ww = ctx.measureText(w).width + 14; pos.push({ word: w, x: xCursor, idx: aGlobalIdx++ }); xCursor -= ww }
-            pos.forEach(({ word, x, idx }) => {
-              if (idx === aIdx) {
-                const ww = ctx.measureText(word).width + 14
-                ctx.fillStyle = accent.v + '33'
-                ctx.beginPath(); ctx.roundRect(x - ww, aStartY + ri * aLineH - aFontSize * 0.85, ww, aFontSize * 1.1, 6); ctx.fill()
-                ctx.fillStyle = accent.v
-              } else { ctx.fillStyle = arabicColor }
-              ctx.textAlign = 'right'
-              ctx.fillText(word, x, aStartY + ri * aLineH)
-            })
-          })
-        }
-
-        const aBlockH = showArabic ? aRows.length * aLineH : 0
-
-        // Transliteration
-        const tFontSize = fontSize - 2
-        ctx.font = `italic ${tFontSize}px ${fontFamily}`
-        ctx.direction = 'ltr'; ctx.textAlign = 'left'
-        const tLineH = tFontSize * 1.8
-        const tRows: Row[] = []
-        let tRow: string[] = []; let tRowW = 0
-        for (const w of tWords) {
-          const ww = ctx.measureText(w).width + 10
-          if (tRowW + ww > W - 180 && tRow.length > 0) { tRows.push(tRow); tRow = []; tRowW = 0 }
-          tRow.push(w); tRowW += ww
-        }
-        if (tRow.length) tRows.push(tRow)
-
-        const tStartY = aStartY + aBlockH + (showArabic ? 16 : 0)
-
-        if (showTranslit) {
-          let tGlobalIdx = 0
-          tRows.forEach((r, ri) => {
-            let xCursor = 90
-            r.forEach(w => {
-              const ww = ctx.measureText(w).width + 10
-              if (tGlobalIdx === tIdx) {
-                ctx.fillStyle = accent.v + '22'
-                ctx.beginPath(); ctx.roundRect(xCursor - 4, tStartY + ri * tLineH - tFontSize * 0.85, ww, tFontSize * 1.1, 4); ctx.fill()
-                ctx.fillStyle = accent.v
-              } else { ctx.fillStyle = translitColor }
-              ctx.fillText(w, xCursor, tStartY + ri * tLineH)
-              xCursor += ww; tGlobalIdx++
-            })
-          })
-        }
-
-        const tBlockH = showTranslit ? tRows.length * tLineH : 0
-
-        // Translation (word-by-word highlighting)
-        if (showTranslation) {
-          ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
-          ctx.textAlign = 'left'; ctx.direction = 'ltr'
-          const maxW = W - 180
-          type TrRow = Array<{ word: string; idx: number }>
-          const trRows: TrRow[] = []
-          let trRowCur: TrRow = []; let trRowW = 0
-          trWords.forEach((w, wi) => {
-            const ww = ctx.measureText(w + ' ').width
-            if (trRowW + ww > maxW && trRowCur.length > 0) { trRows.push(trRowCur); trRowCur = []; trRowW = 0 }
-            trRowCur.push({ word: w, idx: wi }); trRowW += ww
-          })
-          if (trRowCur.length) trRows.push(trRowCur)
-
-          const trLineH = fontSize * 1.6
-          let trY = tStartY + tBlockH + (showTranslit ? 20 : 0)
-          trRows.forEach(r => {
-            let xCursor = 90
-            r.forEach(({ word, idx }) => {
-              const ww = ctx.measureText(word + ' ').width
-              if (idx === trIdx) {
-                ctx.fillStyle = accent.v + '22'
-                ctx.beginPath(); ctx.roundRect(xCursor - 2, trY - fontSize * 0.85, ww, fontSize * 1.1, 3); ctx.fill()
-                ctx.fillStyle = accent.v
-              } else {
-                ctx.fillStyle = translationColor
-              }
-              ctx.fillText(word, xCursor, trY)
-              xCursor += ww
-            })
-            trY += trLineH
-          })
-        }
-
-        // Progress bar
-        const prog = audioDuration > 0 ? t / audioDuration : 0
-        const barY = H - 90
-        ctx.fillStyle = '#e5e7eb'
-        ctx.beginPath(); ctx.roundRect(60, barY, W - 120, 10, 5); ctx.fill()
-        if (prog > 0) {
-          ctx.fillStyle = accent.v
-          ctx.beginPath(); ctx.roundRect(60, barY, (W - 120) * prog, 10, 5); ctx.fill()
-          ctx.beginPath(); ctx.arc(60 + (W - 120) * prog, barY + 5, 8, 0, Math.PI * 2); ctx.fill()
-        }
-
-        const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-        ctx.font = `22px ${fontFamily}`; ctx.fillStyle = '#9ca3af'; ctx.direction = 'ltr'
-        ctx.textAlign = 'left'; ctx.fillText(fmt(t), 60, barY + 36)
-        ctx.textAlign = 'right'; ctx.fillText(fmt(audioDuration), W - 60, barY + 36)
-
-        ctx.font = `bold 18px ${fontFamily}`; ctx.fillStyle = accent.v; ctx.textAlign = 'center'
-        ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - 28)
-        ctx.fillStyle = accent.v; ctx.fillRect(0, H - 8, W, 8)
-
-        // Emoji overlays — drawn last so they sit on top of all content
-        if (emojiOverlays.length > 0) {
-          // Scale from preview container (~700px wide) to canvas (1080px)
-          const emojiScale = W / 700
-          ctx.font = `${Math.round(36 * emojiScale)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
-          ctx.textAlign = 'left'
-          ctx.direction = 'ltr'
-          ctx.globalAlpha = 1
-          for (const { emoji, x, y } of emojiOverlays) {
-            ctx.fillText(emoji, (x / 100) * W, (y / 100) * H)
-          }
-        }
-      }
-
-      // ── Encode ─────────────────────────────────────────────────────────────
-      const FPS = isMobileDevice ? 24 : 30
-      const sampleRate = audioBuffer.sampleRate
-      const numChannels = audioBuffer.numberOfChannels
-
-      const muxer = new Muxer({
-        target: new ArrayBufferTarget(),
-        video: { codec: 'avc', width: W, height: H },
-        audio: { codec: 'aac', sampleRate, numberOfChannels: numChannels },
-        fastStart: 'in-memory',
-      })
-
-      let encoderError: Error | null = null
-      const videoEncoder = new VideoEncoder({
-        output: (chunk, meta) => muxer.addVideoChunk(chunk, meta ?? {}),
-        error: e => { encoderError = e },
-      })
-      videoEncoder.configure({ codec: 'avc1.4d0028', width: W, height: H, bitrate: isMobileDevice ? 2_000_000 : 4_000_000, framerate: FPS })
-
-      const audioEncoder = new AudioEncoder({
-        output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? {}),
-        error: e => { encoderError = e },
-      })
-
-      const audioConfig = { codec: 'mp4a.40.2' as const, sampleRate, numberOfChannels: numChannels, bitrate: 128_000 }
-      const audioSupport = await AudioEncoder.isConfigSupported(audioConfig)
-      if (!audioSupport.supported) throw new Error('AAC audio encoding not supported on this device')
-      audioEncoder.configure(audioConfig)
-
-      const CHUNK = 1024; const totalSamples = audioBuffer.length
-      const channelData: Float32Array[] = []
-      for (let c = 0; c < numChannels; c++) channelData.push(audioBuffer.getChannelData(c))
-      for (let offset = 0; offset < totalSamples; offset += CHUNK) {
-        const frameCount = Math.min(CHUNK, totalSamples - offset)
-        const timestamp = Math.round((offset / sampleRate) * 1_000_000)
-        const data = new Float32Array(numChannels * frameCount)
-        for (let c = 0; c < numChannels; c++) data.set(channelData[c].subarray(offset, offset + frameCount), c * frameCount)
-        const ad = new AudioData({ format: 'f32-planar', sampleRate, numberOfFrames: frameCount, numberOfChannels: numChannels, timestamp, data })
-        audioEncoder.encode(ad); ad.close()
-        if ((offset / CHUNK) % 128 === 127) await new Promise(res => setTimeout(res, 0))
-        if (encoderError) throw encoderError
-      }
-
-      const totalFrames = Math.ceil(audioDuration * FPS)
-      for (let i = 0; i <= totalFrames; i++) {
-        drawFrame(Math.min(i / FPS, audioDuration))
-        const vf = new VideoFrame(canvas, { timestamp: Math.round((i / FPS) * 1_000_000), duration: Math.round(1_000_000 / FPS) })
-        videoEncoder.encode(vf, { keyFrame: i % (FPS * 2) === 0 }); vf.close()
-        if (i % 60 === 0) await new Promise(res => setTimeout(res, 0))
-      }
-
-      await videoEncoder.flush(); await audioEncoder.flush()
-      if (encoderError) throw encoderError
-      muxer.finalize()
-      await audioCtx.close()
-
-      videoBlobRef.current = new Blob([(muxer.target as ArrayBufferTarget).buffer], { type: 'video/mp4' })
-      setVideoState('done')
+      decoded = await decodeAudio(audioUrl)
     } catch (err) {
-      console.error('Video generation failed', err)
-      setShareError(`Could not generate video: ${(err as Error).message}`)
+      setShareError(`Could not load audio: ${(err as Error).message}`)
       setVideoState('idle')
+      return
     }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = VIDEO_CANVAS_SIZE; canvas.height = VIDEO_CANVAS_SIZE
+    const offscreen = canvas.transferControlToOffscreen()
+
+    spawnVideoWorker(
+      {
+        mode: 'designer',
+        canvas: offscreen,
+        channelData: decoded.channelData,
+        sampleRate: decoded.sampleRate,
+        numberOfChannels: decoded.numberOfChannels,
+        audioDuration: decoded.audioDuration,
+        isMobile: isMobileDevice,
+        arabicText: dua.arabicText,
+        transliteration: dua.transliteration,
+        translation: trans,
+        topic: dua.topic,
+        surah: dua.surah,
+        ayah: dua.ayah,
+        fontFamily,
+        fontSize,
+        fontWeight,
+        arabicColor,
+        translitColor,
+        translationColor,
+        blockBg,
+        accent,
+        showBismillah,
+        showArabic: item.includeArabic,
+        showTranslit: item.includeTransliteration,
+        showTranslation: item.includeTranslation,
+        borderStyle,
+        borderWidth,
+        borderColor,
+        borderRadius,
+        blockAccent,
+        emojiOverlays: emojiOverlays.map(({ emoji, x, y }) => ({ emoji, x, y })),
+      },
+      [offscreen, ...decoded.channelData.map(c => c.buffer)],
+      {
+        workerRef: videoWorkerRef,
+        onDone: (buffer) => {
+          videoBlobRef.current = new Blob([buffer], { type: 'video/mp4' })
+          setVideoState('done')
+        },
+        onError: (msg) => {
+          setShareError(`Could not generate video: ${msg}`)
+          setVideoState('idle')
+        },
+        onProgress: setEncodeStage,
+      },
+    )
   }
 
   const downloadDesignVideo = async () => {
@@ -1043,9 +808,7 @@ const filteredDuas = duas.filter(d => {
     <div className="h-screen flex flex-col bg-surface">
       {/* Header */}
       <header className="bg-navy flex items-center px-4 py-3 shrink-0">
-        <button onClick={() => navigate(-1)} className="text-navy-muted hover:text-white text-sm font-medium mr-3">
-          ← Back
-        </button>
+        <HomeButton />
         <h1 className="flex-1 text-white font-bold text-lg text-center">Print Designer</h1>
         <button
           onClick={handlePrint}
@@ -1086,6 +849,7 @@ const filteredDuas = duas.filter(d => {
           <SharePanel
             onClose={() => { setShowSharePanel(false); setShareError(null) }}
             error={shareError}
+            encodeStage={encodeStage}
             onShareImage={handleShareImage}
             imageLoading={imageLoading}
             videoState={videoState}
@@ -1129,7 +893,11 @@ const filteredDuas = duas.filter(d => {
           onClick={() => { setShowSharePanel(p => !p); setShareError(null) }}
           className={`flex-1 py-3 rounded-xl font-bold text-sm transition-colors ${showSharePanel ? 'bg-navy text-white' : 'bg-gold hover:bg-gold-dark text-white'}`}
         >
-          📲 Share
+          <svg className="inline-block w-4 h-4 mr-1.5 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+          Share
         </button>
       </div>
     </div>
