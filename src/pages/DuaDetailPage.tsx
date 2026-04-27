@@ -9,6 +9,7 @@ import SignInModal from '../components/SignInModal'
 import { addBookmark, removeBookmark } from '../services/bookmarksApi'
 import { downloadVideoFile } from '../util/downloadVideo'
 import { generateIOSVideo } from '../util/generateIOSVideo'
+import { toErrorMessage } from '../util/errorMessage'
 import { decodeAudio } from '../util/decodeAudio'
 import { isIOS as deviceIsIOS, isMobileDevice, VIDEO_CANVAS_SIZE } from '../util/deviceDetect'
 import { spawnVideoWorker } from '../util/spawnVideoWorker'
@@ -369,7 +370,7 @@ export default function DuaDetailPage() {
         setVideoState('done')
       } catch (err) {
         console.error('iOS video generation failed', err)
-        setShareError(`Could not generate video: ${(err as Error).message}`)
+        setShareError(`Could not generate video: ${toErrorMessage(err)}`)
         setVideoState('idle')
       }
       return

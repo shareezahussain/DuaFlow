@@ -1,7 +1,9 @@
+import type { RefObject } from 'react'
 import type { VideoWorkerInput } from '../workers/videoEncoder.worker'
+import { toErrorMessage } from './errorMessage'
 
 type Callbacks = {
-  workerRef: React.MutableRefObject<Worker | null>
+  workerRef: RefObject<Worker | null>
   onDone: (buffer: ArrayBuffer) => void
   onError: (message: string) => void
   onProgress: (stage: string) => void
@@ -15,7 +17,7 @@ export function spawnVideoWorker(payload: VideoWorkerInput, transferables: Trans
       { type: 'module' },
     )
   } catch (err) {
-    cb.onError(`Could not start video worker: ${(err as Error).message}`)
+    cb.onError(`Could not start video worker: ${toErrorMessage(err)}`)
     return
   }
   cb.workerRef.current = worker
