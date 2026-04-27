@@ -871,7 +871,7 @@ const filteredDuas = duas.filter(d => {
       )}
 
       {/* Action bar */}
-      <div className="flex gap-2 px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] bg-white border-t border-gray-200 shadow-lg shrink-0">
+      <div className="flex gap-2 px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] bg-white border-t border-gray-200 shadow-lg shrink-0 mb-4">
         <button
           onClick={handlePrint}
           className="flex-1 py-3 rounded-xl border-2 border-navy text-navy font-bold text-sm hover:bg-navy hover:text-white transition-colors"
