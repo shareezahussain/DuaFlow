@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import HomeButton from '../components/HomeButton'
 import { useApp, type Language, type EmojiOverlay } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
@@ -142,7 +141,6 @@ function ColorDots({ colors, selected, onSelect }: { colors: string[]; selected:
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function PrintDesignerPage() {
-
   const { printCollection, addToPrint, removeFromPrint, updatePrintItem, clearPrintCollection, language, setLanguage } = useApp()
   const { duas } = useQuranContent()
 
