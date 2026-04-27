@@ -133,7 +133,7 @@ export default function SharePanel({
                 : 'text-gray-400 hover:text-gray-600'
             }`}
           >
-            {t === 'image' ? '📸 Image' : '🎬 Sing-Along'}
+            {t === 'image' ? '📸 Image' : '🎬 Video'}
           </button>
         ))}
       </div>
@@ -186,7 +186,7 @@ export default function SharePanel({
                 onClick={onGenerateVideo}
                 className="w-full py-2.5 rounded-xl bg-navy hover:bg-navy-light text-white font-bold text-sm transition-colors"
               >
-                {isIOS ? '🎬 Generate Video (Static)' : '🎬 Generate Sing-Along'}
+                {isIOS ? '🎬 Generate Video (Static)' : '🎬 Generate Video'}
               </button>
             )}
 
