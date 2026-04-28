@@ -289,45 +289,55 @@ function makeDesignerDraw(
             showTranslation, borderStyle, borderWidth, borderColor, borderRadius,
             blockAccent, emojiOverlays, topic, surah, ayah } = p
 
+    // Scale all hardcoded pixel values relative to the 1080px reference size
+    const s = W / 1080
+
+    const pad       = Math.round(60 * s)   // horizontal padding
+    const barH      = Math.round(90 * s)   // height reserved for progress bar at bottom
+    const coverH    = Math.round(172 * s)  // top cover band (accent + topic + surah)
+    const bismH     = showBismillah ? Math.round(68 * s) : 0
+
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, W, H)
 
+    // Top accent bar + cover band
     ctx.fillStyle = accent.v
-    ctx.fillRect(0, 0, W, 12)
-    ctx.fillRect(0, 12, W, 160)
+    ctx.fillRect(0, 0, W, Math.round(12 * s))
+    ctx.fillRect(0, Math.round(12 * s), W, coverH - Math.round(12 * s))
 
-    ctx.font = `bold 32px ${fontFamily}`
+    ctx.font = `bold ${Math.round(32 * s)}px ${fontFamily}`
     ctx.fillStyle = accent.t
     ctx.textAlign = 'center'
     ctx.direction = 'ltr'
-    ctx.fillText(topic, W / 2, 80)
-    ctx.font = `22px ${fontFamily}`
+    ctx.fillText(topic, W / 2, Math.round(80 * s))
+    ctx.font = `${Math.round(22 * s)}px ${fontFamily}`
     ctx.globalAlpha = 0.8
-    ctx.fillText(`Surah ${surah}:${ayah}`, W / 2, 118)
+    ctx.fillText(`Surah ${surah}:${ayah}`, W / 2, Math.round(118 * s))
     ctx.globalAlpha = 1
 
     if (showBismillah) {
-      ctx.font = '48px Amiri'
+      ctx.font = `${Math.round(48 * s)}px Amiri`
       ctx.fillStyle = accent.v
       ctx.textAlign = 'center'
       ctx.direction = 'rtl'
-      ctx.fillText('بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ', W / 2, 240)
+      ctx.fillText('بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ', W / 2, coverH + Math.round(50 * s))
     }
 
-    const contentTop = showBismillah ? 280 : 200
+    const contentTop  = coverH + bismH
+    const blockHeight = H - contentTop - barH - Math.round(40 * s)
 
     ctx.fillStyle = blockBg
     ctx.beginPath()
-    ctx.roundRect(60, contentTop, W - 120, 600, borderRadius)
+    ctx.roundRect(pad, contentTop, W - pad * 2, blockHeight, borderRadius)
     ctx.fill()
 
     if (borderStyle !== 'none' && blockAccent !== 'none') {
       if (blockAccent === 'left-bar') {
         ctx.fillStyle = borderColor
-        ctx.fillRect(60, contentTop, borderWidth * 2, 600)
+        ctx.fillRect(pad, contentTop, borderWidth * 2, blockHeight)
       } else if (blockAccent === 'top-bar') {
         ctx.fillStyle = borderColor
-        ctx.fillRect(60, contentTop, W - 120, borderWidth * 2)
+        ctx.fillRect(pad, contentTop, W - pad * 2, borderWidth * 2)
       } else if (blockAccent === 'full-border') {
         ctx.strokeStyle = borderColor
         ctx.lineWidth = borderWidth
@@ -335,24 +345,25 @@ function makeDesignerDraw(
         else if (borderStyle === 'dotted') ctx.setLineDash([borderWidth * 2, borderWidth * 2])
         else ctx.setLineDash([])
         ctx.beginPath()
-        ctx.roundRect(60, contentTop, W - 120, 600, borderRadius)
+        ctx.roundRect(pad, contentTop, W - pad * 2, blockHeight, borderRadius)
         ctx.stroke()
         ctx.setLineDash([])
       }
     }
 
-    const aFontSize = fontSize + 20
+    const aFontSize = Math.round((fontSize + 20) * s)
     ctx.font = `${fontWeight} ${aFontSize}px Amiri`
     ctx.direction = 'rtl'
     const aLineH = aFontSize * 1.9
-    const aMaxW = W - 180
-    const aStartY = contentTop + 60
+    const innerPad = Math.round(90 * s)
+    const aMaxW = W - innerPad * 2
+    const aStartY = contentTop + Math.round(60 * s)
     const aRows = buildRows(aWords, ctx, aMaxW, 14)
 
     if (showArabic) {
       let aGlobalIdx = 0
       aRows.forEach((r, ri) => {
-        let xCursor = W - 90
+        let xCursor = W - innerPad
         const pos: Array<{ word: string; x: number; idx: number }> = []
         for (const w of r) {
           const ww = ctx.measureText(w).width + 14
@@ -374,17 +385,17 @@ function makeDesignerDraw(
 
     const aBlockH = showArabic ? aRows.length * aLineH : 0
 
-    const tFontSize = fontSize - 2
+    const tFontSize = Math.round((fontSize - 2) * s)
     ctx.font = `italic ${tFontSize}px ${fontFamily}`
     ctx.direction = 'ltr'; ctx.textAlign = 'left'
     const tLineH = tFontSize * 1.8
-    const tRows = buildRows(tWords, ctx, W - 180, 10)
-    const tStartY = aStartY + aBlockH + (showArabic ? 16 : 0)
+    const tRows = buildRows(tWords, ctx, W - innerPad * 2, 10)
+    const tStartY = aStartY + aBlockH + (showArabic ? Math.round(16 * s) : 0)
 
     if (showTranslit) {
       let tGlobalIdx = 0
       tRows.forEach((r, ri) => {
-        let xCursor = 90
+        let xCursor = innerPad
         r.forEach(w => {
           const ww = ctx.measureText(w).width + 10
           if (tGlobalIdx === tIdx) {
@@ -401,18 +412,19 @@ function makeDesignerDraw(
     const tBlockH = showTranslit ? tRows.length * tLineH : 0
 
     if (showTranslation) {
-      ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+      const trFontSize = Math.round(fontSize * s)
+      ctx.font = `${fontWeight} ${trFontSize}px ${fontFamily}`
       ctx.textAlign = 'left'; ctx.direction = 'ltr'
-      const trRows = buildTrRows(trWords, ctx, W - 180)
-      const trLineH = fontSize * 1.6
-      let trY = tStartY + tBlockH + (showTranslit ? 20 : 0)
+      const trRows = buildTrRows(trWords, ctx, W - innerPad * 2)
+      const trLineH = trFontSize * 1.6
+      let trY = tStartY + tBlockH + (showTranslit ? Math.round(20 * s) : 0)
       trRows.forEach(r => {
-        let xCursor = 90
+        let xCursor = innerPad
         r.forEach(({ word, idx }) => {
           const ww = ctx.measureText(word + ' ').width
           if (idx === trIdx) {
             ctx.fillStyle = accent.v + '22'
-            ctx.beginPath(); ctx.roundRect(xCursor - 2, trY - fontSize * 0.85, ww, fontSize * 1.1, 3); ctx.fill()
+            ctx.beginPath(); ctx.roundRect(xCursor - 2, trY - trFontSize * 0.85, ww, trFontSize * 1.1, 3); ctx.fill()
             ctx.fillStyle = accent.v
           } else { ctx.fillStyle = translationColor }
           ctx.fillText(word, xCursor, trY)
@@ -423,21 +435,22 @@ function makeDesignerDraw(
     }
 
     const prog = audioDuration > 0 ? t / audioDuration : 0
-    const barY = H - 90
+    const barY = H - barH + Math.round(10 * s)
+    const barDot = Math.round(8 * s)
     ctx.fillStyle = '#e5e7eb'
-    ctx.beginPath(); ctx.roundRect(60, barY, W - 120, 10, 5); ctx.fill()
+    ctx.beginPath(); ctx.roundRect(pad, barY, W - pad * 2, Math.round(10 * s), 5); ctx.fill()
     if (prog > 0) {
       ctx.fillStyle = accent.v
-      ctx.beginPath(); ctx.roundRect(60, barY, (W - 120) * prog, 10, 5); ctx.fill()
-      ctx.beginPath(); ctx.arc(60 + (W - 120) * prog, barY + 5, 8, 0, Math.PI * 2); ctx.fill()
+      ctx.beginPath(); ctx.roundRect(pad, barY, (W - pad * 2) * prog, Math.round(10 * s), 5); ctx.fill()
+      ctx.beginPath(); ctx.arc(pad + (W - pad * 2) * prog, barY + Math.round(5 * s), barDot, 0, Math.PI * 2); ctx.fill()
     }
-    ctx.font = `22px ${fontFamily}`; ctx.fillStyle = '#9ca3af'; ctx.direction = 'ltr'
-    ctx.textAlign = 'left'; ctx.fillText(fmt(t), 60, barY + 36)
-    ctx.textAlign = 'right'; ctx.fillText(fmt(audioDuration), W - 60, barY + 36)
+    ctx.font = `${Math.round(22 * s)}px ${fontFamily}`; ctx.fillStyle = '#9ca3af'; ctx.direction = 'ltr'
+    ctx.textAlign = 'left'; ctx.fillText(fmt(t), pad, barY + Math.round(36 * s))
+    ctx.textAlign = 'right'; ctx.fillText(fmt(audioDuration), W - pad, barY + Math.round(36 * s))
 
-    ctx.font = `bold 18px ${fontFamily}`; ctx.fillStyle = accent.v; ctx.textAlign = 'center'
-    ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - 28)
-    ctx.fillStyle = accent.v; ctx.fillRect(0, H - 8, W, 8)
+    ctx.font = `bold ${Math.round(18 * s)}px ${fontFamily}`; ctx.fillStyle = accent.v; ctx.textAlign = 'center'
+    ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - Math.round(28 * s))
+    ctx.fillStyle = accent.v; ctx.fillRect(0, H - Math.round(8 * s), W, Math.round(8 * s))
 
     if (emojiOverlays.length > 0) {
       const emojiScale = W / 700
