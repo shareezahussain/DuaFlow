@@ -207,7 +207,7 @@ export default function SharePanel({
               <>
                 <div className="flex gap-4 justify-center mb-3">
                   {PLATFORMS.map(({ key, label, bg, icon }) => (
-                    <button key={key} onClick={() => onShareVideo(key)} className="flex flex-col items-center gap-1.5 group">
+                    <button key={key} onClick={() => onShareVideo?.(key)} className="flex flex-col items-center gap-1.5 group">
                       <div className={`w-14 h-14 rounded-2xl ${bg} flex items-center justify-center shadow-sm transition-all group-hover:scale-105`}>
                         {icon('lg')}
                       </div>
