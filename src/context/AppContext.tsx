@@ -98,6 +98,7 @@ interface AppStore {
   setUserToken: (token: string | null) => void;
   setRefreshToken: (token: string | null) => void;
   loadUserProfile: (userId: string) => void;
+  applyAuthTokens: (tokens: { access_token: string; refresh_token?: string; id_token?: string }) => Promise<void>;
   fetchAndSetUserName: () => Promise<void>;
   startLogin: () => Promise<void>;
   signOut: () => void;
@@ -173,55 +174,38 @@ export const useApp = create<AppStore>()(
         if (raw) {
           try {
             const saved = JSON.parse(raw)
-            set({
-              userId,
-              printCollection: saved.printCollection ?? [],
-              design: { ...DEFAULT_DESIGN, ...(saved.design ?? {}) },
-            })
+            set({ userId, printCollection: saved.printCollection ?? [], design: { ...DEFAULT_DESIGN, ...(saved.design ?? {}) } })
             return
-          } catch { /* fall through to defaults */ }
+          } catch { /* fall through */ }
         }
         set({ userId, printCollection: [], design: DEFAULT_DESIGN })
       },
-      fetchAndSetUserName: async () => {
-        const { userToken } = get()
-        if (!userToken) return
-        const payload = decodeJwtPayload(userToken)
-        const nameFromJwt = (payload?.name ?? payload?.given_name ?? payload?.first_name ?? payload?.preferred_username ?? (payload?.email as string | undefined)?.split('@')[0]) as string | undefined
-        if (nameFromJwt) {
-          set({ userName: nameFromJwt, userPicture: (payload?.picture as string | null) ?? null })
-          return
-        }
-        try {
-          const profile = await fetchUserProfile(userToken)
-          const name = profile.name ?? profile.given_name ?? profile.first_name ?? profile.preferred_username ?? profile.email?.split('@')[0] ?? null
-          set({ userName: name ?? null, userPicture: profile.picture ?? null })
-        } catch (e) {
-          console.error('fetchUserProfile failed:', e)
-        }
-      },
-      startLogin: async () => {
-        const { access_token, refresh_token, id_token } = await pkceStartLogin()
+      applyAuthTokens: async ({ access_token, refresh_token, id_token }) => {
         set({ userToken: access_token })
         if (refresh_token) set({ refreshToken: refresh_token })
 
+        // Restore per-user print/design settings
         const sub = decodeJwtPayload(access_token)?.sub as string | undefined
         if (sub) get().loadUserProfile(sub)
 
-        const nameFromToken = [id_token, access_token].filter(Boolean).reduce<string | null>((found, tok) => {
+        // Extract name + picture — try id_token first, access_token as fallback
+        const candidates = [id_token, access_token].filter((t): t is string => !!t)
+        const name = candidates.reduce<string | null>((found, tok) => {
           if (found) return found
-          const p = decodeJwtPayload(tok!)
-          return (p?.name ?? p?.given_name ?? p?.first_name ?? p?.preferred_username ?? (p?.email as string | undefined)?.split('@')[0]) as string | null ?? null
+          const p = decodeJwtPayload(tok)
+          return ((p?.name ?? p?.given_name ?? p?.first_name ?? p?.preferred_username ?? (p?.email as string | undefined)?.split('@')[0]) as string) || null
         }, null)
+        const picture = candidates.map(t => decodeJwtPayload(t)?.picture as string | undefined).find(Boolean) ?? null
 
-        if (nameFromToken) {
-          const pic = [id_token, access_token].filter(Boolean).map(t => decodeJwtPayload(t!)?.picture).find(Boolean) as string | null ?? null
-          set({ userName: nameFromToken, userPicture: pic })
+        if (name) {
+          set({ userName: name, userPicture: picture ?? null })
         } else {
           try {
             const profile = await fetchUserProfile(access_token)
-            const name = profile.name ?? profile.given_name ?? profile.first_name ?? profile.preferred_username ?? profile.email?.split('@')[0] ?? null
-            set({ userName: name ?? null, userPicture: profile.picture ?? null })
+            set({
+              userName: (profile.name ?? profile.given_name ?? profile.first_name ?? profile.preferred_username ?? profile.email?.split('@')[0]) ?? null,
+              userPicture: profile.picture ?? null,
+            })
           } catch { /* non-fatal */ }
         }
 
@@ -229,7 +213,7 @@ export const useApp = create<AppStore>()(
         try {
           const bookmarks = await fetchBookmarks(access_token)
           const map: Record<string, string> = {}
-          bookmarks.forEach((b) => {
+          bookmarks.forEach(b => {
             if (!b.key || !b.verseNumber || !b.id) return
             RABBANA_META
               .filter(m => m.surah === b.key && m.ayah === b.verseNumber)
@@ -237,6 +221,24 @@ export const useApp = create<AppStore>()(
           })
           set({ bookmarkMap: map })
         } catch { /* non-fatal */ }
+      },
+      fetchAndSetUserName: async () => {
+        const { userToken } = get()
+        if (!userToken) return
+        const p = decodeJwtPayload(userToken)
+        const name = ((p?.name ?? p?.given_name ?? p?.first_name ?? p?.preferred_username ?? (p?.email as string | undefined)?.split('@')[0]) as string) || null
+        if (name) { set({ userName: name, userPicture: (p?.picture as string | null) ?? null }); return }
+        try {
+          const profile = await fetchUserProfile(userToken)
+          set({
+            userName: (profile.name ?? profile.given_name ?? profile.first_name ?? profile.preferred_username ?? profile.email?.split('@')[0]) ?? null,
+            userPicture: profile.picture ?? null,
+          })
+        } catch (e) { console.error('fetchUserProfile failed:', e) }
+      },
+      startLogin: async () => {
+        const tokens = await pkceStartLogin()
+        await get().applyAuthTokens(tokens)
       },
       signOut: () => {
         const { userId, printCollection, design } = get()

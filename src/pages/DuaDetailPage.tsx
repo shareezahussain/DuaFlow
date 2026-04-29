@@ -56,26 +56,34 @@ function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: str
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Amiri',Georgia,serif; padding:40px; background:#fff; }
-  .cover { background:#1a5276; color:#fff; padding:28px 20px; border-radius:12px; text-align:center; margin-bottom:28px; }
-  .cover h1 { font-size:26px; } .cover h2 { font-size:14px; opacity:.8; margin-top:6px; }
-  .ref { font-size:11px; color:#1a5276; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
-  .arabic { font-size:30px; color:#1a2749; line-height:2; text-align:right; direction:rtl; margin-bottom:10px; }
-  .translit { font-size:14px; color:#555; font-style:italic; margin-bottom:8px; }
-  .translation { font-size:16px; color:#2c3e50; line-height:1.8; }
-  .block { border-left:4px solid #1a5276; padding:16px 20px; background:#fafafa; border-radius:0 8px 8px 0; }
-  .bismillah { text-align:center; font-size:26px; color:#1a5276; margin-bottom:20px; direction:rtl; }
-  .footer { text-align:center; color:#aaa; font-size:11px; margin-top:32px; border-top:1px solid #eee; padding-top:12px; }
+  html, body { width:100%; }
+  body { font-family:'Amiri',Georgia,serif; background:#f8fafc; }
+  .header { background:#1d4c4e; padding:28px 40px 22px; text-align:center; }
+  .bismillah { font-size:30px; color:#fff; direction:rtl; margin-bottom:10px; }
+  .topic { font-size:22px; font-weight:700; color:#fff; margin-bottom:4px; }
+  .surah-ref { font-size:13px; color:rgba(255,255,255,0.72); }
+  .content { padding:28px 40px 32px; }
+  .arabic { font-size:28px; color:#0d0d0d; line-height:1.95; text-align:right; direction:rtl; margin-bottom:18px; }
+  .divider { height:1px; background:#e2e8f0; margin-bottom:16px; }
+  .translit { font-size:14px; color:#4a5568; font-style:italic; line-height:1.65; margin-bottom:18px; }
+  .tr-label { font-size:10px; font-weight:700; color:#718096; letter-spacing:1.2px; text-transform:uppercase; margin-bottom:8px; }
+  .translation { font-size:15px; color:#333; line-height:1.75; }
+  .footer { background:#1d4c4e; padding:11px; text-align:center; }
+  .footer span { margin-top:14px;font-size:12px; color:rgba(255,255,255,0.8); }
 </style></head><body>
-<div class="cover"><h1>${d.topic}</h1><h2>Surah ${d.surah}:${d.ayah}</h2></div>
-<div class="bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>
-<div class="block">
-  <div class="ref">Surah ${d.surah}:${d.ayah} — ${d.topic}</div>
+<div class="header">
+  <div class="bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>
+  <div class="topic">${d.topic}</div>
+  <div class="surah-ref">Surah ${d.surah}:${d.ayah}</div>
+</div>
+<div class="content">
   <div class="arabic">${d.arabicText}</div>
+  <div class="divider"></div>
   <div class="translit">${d.transliteration}</div>
+  <div class="tr-label">Translation</div>
   <div class="translation">${translation}</div>
 </div>
-<div class="footer">DuaFlow — Quranic Supplications</div>
+<div class="footer"><span>DuaFlow — Quranic Supplications</span></div>
 </body></html>`
 }
 
@@ -295,10 +303,10 @@ export default function DuaDetailPage() {
     try {
       const h2c = (await import('html2canvas')).default
       const div = document.createElement('div')
-      div.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;background:#fff;'
+      div.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;'
       div.innerHTML = buildPrintHtml(dua, language)
       document.body.appendChild(div)
-      const canvas = await h2c(div, { scale: 2, useCORS: true, backgroundColor: '#fff', width: 700 })
+      const canvas = await h2c(div, { scale: 2, useCORS: true, backgroundColor: '#f8fafc', width: 700 })
       document.body.removeChild(div)
       const blob = await new Promise<Blob>((res, rej) =>
         canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png', 1)
@@ -355,13 +363,29 @@ export default function DuaDetailPage() {
     if (isIOS) {
       try {
         const audioUrl = getAudioUrl(dua.surah, dua.ayah, selectedReciter)
-        const h2c = (await import('html2canvas')).default
-        const div = document.createElement('div')
-        div.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;background:#fff;'
-        div.innerHTML = buildPrintHtml(dua, language)
-        document.body.appendChild(div)
-        const canvas = await h2c(div, { scale: 1, useCORS: true, backgroundColor: '#fff', width: 700 })
-        document.body.removeChild(div)
+
+        setEncodeStage('Loading audio…')
+        const audioDuration = await new Promise<number>((resolve) => {
+          const audio = new Audio(audioUrl)
+          audio.onloadedmetadata = () => resolve(audio.duration)
+          audio.onerror = () => resolve(0)
+        })
+
+        setEncodeStage('Rendering frame…')
+        await document.fonts.ready
+        const canvas = document.createElement('canvas')
+        canvas.width = VIDEO_CANVAS_SIZE
+        canvas.height = VIDEO_CANVAS_SIZE
+        const { renderKaraokeFrame } = await import('../util/renderKaraokeFrame')
+        renderKaraokeFrame(canvas, {
+          arabicText:      dua.arabicText,
+          transliteration: dua.transliteration,
+          translation:     dua.translations[language],
+          topic:           dua.topic,
+          surah:           dua.surah,
+          ayah:            dua.ayah,
+        }, audioDuration)
+
         const frameBlob = await new Promise<Blob>((res, rej) =>
           canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png', 0.9)
         )
