@@ -120,51 +120,85 @@ function makeKaraokeDraw(
   topic: string, surah: number, ayah: number,
   wordTimings: WordTiming[] | null,
 ) {
+  const GREEN      = '#1d4c4e'
+  const GREEN_PILL = '#e0eeee'
+  const BLACK      = '#0d0d0d'
+  const GRAY       = '#4a5568'
+  const GRAY_MID   = '#718096'
+  const TRACK      = '#e2e8f0'
+
+  // ── Pre-compute layout once (not per frame) ───────────────────────────────
+  const s        = W / 1080
+  const pad      = Math.round(64 * s)
+  const barH     = Math.round(88 * s)
+  const headerH  = Math.round(160 * s)
+
+  const aFontSize  = Math.round(52 * s)
+  const tFontSize  = Math.round(26 * s)
+  const trFontSize = Math.round(20 * s)
+  const aLineH     = aFontSize * 1.9
+  const tLineH     = tFontSize * 1.8
+  const trLineH    = trFontSize * 1.7
+
+  ctx.font = `${aFontSize}px Amiri`
+  const aRows = buildRows(aWords, ctx, W - pad * 2, 14).slice(0, 4)
+
+  ctx.font = `italic ${tFontSize}px Amiri`
+  const tRows = buildRows(tWords, ctx, W - pad * 2, 10).slice(0, 3)
+
+  ctx.font = `${trFontSize}px Amiri`
+  const trRows = buildTrRows(trWords, ctx, W - pad * 2).slice(0, 3)
+
+  const aBlockH  = aRows.length * aLineH
+  const tBlockH  = tRows.length * tLineH
+  const trLabelH = Math.round(20 * s)
+  const trBlockH = trRows.length * trLineH + trLabelH
+  const gapAT    = Math.round(30 * s)
+  const gapTTr   = Math.round(18 * s)
+  const totalContentH = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
+
+  // Center content in the space between header and progress bar
+  const availableH  = H - barH - headerH
+  const aStartY     = headerH + Math.round(Math.max(aFontSize * 1.5, (availableH - totalContentH) / 2))
+
   return (t: number) => {
     const wordIdx = wordTimings ? exactWordIndex(wordTimings, t) : propIdx(aWords, t, audioDuration)
     const aIdx = wordIdx, tIdx = wordIdx
     const trIdx = propIdx(trWords, t, audioDuration)
 
-    const grad = ctx.createLinearGradient(0, 0, 0, H)
-    grad.addColorStop(0, '#0d1b2a')
-    grad.addColorStop(1, '#1a3a5c')
-    ctx.fillStyle = grad
+    // White background
+    ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, W, H)
 
-    ctx.fillStyle = '#f39c12'
-    ctx.fillRect(0, 0, W, 8)
+    // Dark green header band
+    ctx.fillStyle = GREEN
+    ctx.fillRect(0, 0, W, headerH)
 
-    ctx.font = '52px Amiri'
-    ctx.fillStyle = '#f39c12'
+    // Bismillah — white, inside header
+    ctx.font = `${Math.round(44 * s)}px Amiri`
+    ctx.fillStyle = '#ffffff'
     ctx.textAlign = 'center'
     ctx.direction = 'rtl'
-    ctx.fillText('بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ', W / 2, 90)
+    ctx.fillText('بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ', W / 2, Math.round(76 * s))
 
-    ctx.font = 'bold 26px Amiri'
-    ctx.fillStyle = '#a9cce3'
+    // Topic + surah — white, slightly dimmed
+    ctx.font = `bold ${Math.round(22 * s)}px Amiri`
+    ctx.fillStyle = 'rgba(255,255,255,0.82)'
     ctx.textAlign = 'center'
     ctx.direction = 'ltr'
-    ctx.fillText(`${topic}  •  Surah ${surah}:${ayah}`, W / 2, 148)
+    ctx.fillText(`${topic}  •  Surah ${surah}:${ayah}`, W / 2, Math.round(130 * s))
 
-    ctx.strokeStyle = '#2e86c1'
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    ctx.moveTo(80, 168)
-    ctx.lineTo(W - 80, 168)
-    ctx.stroke()
+    // Light gray content area
+    ctx.fillStyle = '#f8fafc'
+    ctx.fillRect(0, headerH, W, H - headerH)
 
-    // Arabic
-    const aFontSize = 54
+    // ── Arabic ──────────────────────────────────────────────────────────────
     ctx.font = `${aFontSize}px Amiri`
     ctx.direction = 'rtl'
-    const aLineH = aFontSize * 1.9
-    const aRows = buildRows(aWords, ctx, W - 120, 14)
-    const displayedARows = aRows.slice(0, 4)
 
     let wordGlobalIdx = 0
-    const aStartY = 230
-    displayedARows.forEach((r, ri) => {
-      let xCursor = W - 60
+    aRows.forEach((r, ri) => {
+      let xCursor = W - pad
       const positions: Array<{ word: string; x: number; idx: number }> = []
       for (const w of r) {
         const ww = ctx.measureText(w).width + 14
@@ -174,44 +208,46 @@ function makeKaraokeDraw(
       positions.forEach(({ word, x, idx }) => {
         if (idx === aIdx) {
           const ww = ctx.measureText(word).width + 14
-          ctx.fillStyle = 'rgba(243,156,18,0.25)'
+          ctx.fillStyle = GREEN_PILL
           ctx.beginPath()
           ctx.roundRect(x - ww, aStartY + ri * aLineH - aFontSize * 0.85, ww, aFontSize * 1.1, 6)
           ctx.fill()
-          ctx.fillStyle = '#f39c12'
+          ctx.fillStyle = GREEN
         } else {
-          ctx.fillStyle = '#ffffff'
+          ctx.fillStyle = BLACK
         }
         ctx.textAlign = 'right'
         ctx.fillText(word, x, aStartY + ri * aLineH)
       })
     })
 
-    const aBlockH = displayedARows.length * aLineH
+    // Thin divider under Arabic
+    ctx.strokeStyle = TRACK
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(pad, aStartY + aBlockH + Math.round(12 * s))
+    ctx.lineTo(W - pad, aStartY + aBlockH + Math.round(12 * s))
+    ctx.stroke()
 
-    // Transliteration
-    const tFontSize = 28
+    // ── Transliteration ─────────────────────────────────────────────────────
     ctx.font = `italic ${tFontSize}px Amiri`
     ctx.direction = 'ltr'
     ctx.textAlign = 'left'
-    const tLineH = tFontSize * 1.8
-    const tRows = buildRows(tWords, ctx, W - 120, 10)
-    const displayedTRows = tRows.slice(0, 3)
+    const tStartY = aStartY + aBlockH + gapAT
 
     let tGlobalIdx = 0
-    const tStartY = aStartY + aBlockH + 28
-    displayedTRows.forEach((r, ri) => {
-      let xCursor = 60
+    tRows.forEach((r, ri) => {
+      let xCursor = pad
       r.forEach(w => {
         const ww = ctx.measureText(w).width + 10
         if (tGlobalIdx === tIdx) {
-          ctx.fillStyle = 'rgba(243,156,18,0.2)'
+          ctx.fillStyle = GREEN_PILL
           ctx.beginPath()
           ctx.roundRect(xCursor - 4, tStartY + ri * tLineH - tFontSize * 0.85, ww, tFontSize * 1.1, 4)
           ctx.fill()
-          ctx.fillStyle = '#f39c12'
+          ctx.fillStyle = GREEN
         } else {
-          ctx.fillStyle = '#a9cce3'
+          ctx.fillStyle = GRAY
         }
         ctx.fillText(w, xCursor, tStartY + ri * tLineH)
         xCursor += ww
@@ -219,55 +255,53 @@ function makeKaraokeDraw(
       })
     })
 
-    // Translation
-    const trFontSize = 22
+    // ── Translation ──────────────────────────────────────────────────────────
     ctx.font = `${trFontSize}px Amiri`
     ctx.direction = 'ltr'
     ctx.textAlign = 'left'
-    const trLineH = trFontSize * 1.7
-    const trRows = buildTrRows(trWords, ctx, W - 120)
-    const trStartY = tStartY + displayedTRows.length * tLineH + 32
+    const trStartY = tStartY + tBlockH + gapTTr
 
-    ctx.font = 'bold 16px Amiri'
-    ctx.fillStyle = '#6fa8c9'
-    ctx.fillText('Translation', 60, trStartY)
+    ctx.font = `bold ${Math.round(12 * s)}px Amiri`
+    ctx.fillStyle = GRAY_MID
+    ctx.fillText('TRANSLATION', pad, trStartY)
     ctx.font = `${trFontSize}px Amiri`
 
-    trRows.slice(0, 3).forEach((r, ri) => {
-      let xCursor = 60
+    trRows.forEach((r, ri) => {
+      let xCursor = pad
       r.forEach(({ word, idx }) => {
         const ww = ctx.measureText(word + ' ').width
         if (idx === trIdx) {
-          ctx.fillStyle = 'rgba(243,156,18,0.2)'
+          ctx.fillStyle = GREEN_PILL
           ctx.beginPath()
           ctx.roundRect(xCursor - 2, trStartY + (ri + 1) * trLineH - trFontSize * 0.85, ww, trFontSize * 1.1, 4)
           ctx.fill()
-          ctx.fillStyle = '#f39c12'
+          ctx.fillStyle = GREEN
         } else {
-          ctx.fillStyle = '#d0e8f5'
+          ctx.fillStyle = '#333333'
         }
         ctx.fillText(word, xCursor, trStartY + (ri + 1) * trLineH)
         xCursor += ww
       })
     })
 
-    // Progress bar
+    // ── Progress bar ─────────────────────────────────────────────────────────
     const prog = audioDuration > 0 ? t / audioDuration : 0
-    const barY = H - 90
-    ctx.fillStyle = '#1e3a5f'
-    ctx.beginPath(); ctx.roundRect(60, barY, W - 120, 10, 5); ctx.fill()
+    const barY = H - barH + Math.round(12 * s)
+    ctx.fillStyle = TRACK
+    ctx.beginPath(); ctx.roundRect(pad, barY, W - pad * 2, Math.round(6 * s), 3); ctx.fill()
     if (prog > 0) {
-      ctx.fillStyle = '#f39c12'
-      ctx.beginPath(); ctx.roundRect(60, barY, (W - 120) * prog, 10, 5); ctx.fill()
-      ctx.beginPath(); ctx.arc(60 + (W - 120) * prog, barY + 5, 8, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = GREEN
+      ctx.beginPath(); ctx.roundRect(pad, barY, (W - pad * 2) * prog, Math.round(6 * s), 3); ctx.fill()
+      ctx.beginPath(); ctx.arc(pad + (W - pad * 2) * prog, barY + Math.round(3 * s), Math.round(7 * s), 0, Math.PI * 2); ctx.fill()
     }
-    ctx.font = '24px Amiri'; ctx.fillStyle = '#a9cce3'; ctx.direction = 'ltr'
-    ctx.textAlign = 'left'; ctx.fillText(fmt(t), 60, barY + 38)
-    ctx.textAlign = 'right'; ctx.fillText(fmt(audioDuration), W - 60, barY + 38)
+    ctx.font = `${Math.round(18 * s)}px Amiri`; ctx.fillStyle = GRAY_MID; ctx.direction = 'ltr'
+    ctx.textAlign = 'left'; ctx.fillText(fmt(t), pad, barY + Math.round(30 * s))
+    ctx.textAlign = 'right'; ctx.fillText(fmt(audioDuration), W - pad, barY + Math.round(30 * s))
 
-    ctx.font = 'bold 20px Amiri'; ctx.fillStyle = '#2e86c1'; ctx.textAlign = 'center'
-    ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - 28)
-    ctx.fillStyle = '#f39c12'; ctx.fillRect(0, H - 8, W, 8)
+    // Branding + bottom bar
+    ctx.font = `bold ${Math.round(15 * s)}px Amiri`; ctx.fillStyle = GREEN; ctx.textAlign = 'center'
+    ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - Math.round(20 * s))
+    ctx.fillStyle = GREEN; ctx.fillRect(0, H - Math.round(7 * s), W, Math.round(7 * s))
   }
 }
 

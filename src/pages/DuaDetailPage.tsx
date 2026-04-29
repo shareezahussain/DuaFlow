@@ -355,13 +355,29 @@ export default function DuaDetailPage() {
     if (isIOS) {
       try {
         const audioUrl = getAudioUrl(dua.surah, dua.ayah, selectedReciter)
-        const h2c = (await import('html2canvas')).default
-        const div = document.createElement('div')
-        div.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;background:#fff;'
-        div.innerHTML = buildPrintHtml(dua, language)
-        document.body.appendChild(div)
-        const canvas = await h2c(div, { scale: 1, useCORS: true, backgroundColor: '#fff', width: 700 })
-        document.body.removeChild(div)
+
+        setEncodeStage('Loading audio…')
+        const audioDuration = await new Promise<number>((resolve) => {
+          const audio = new Audio(audioUrl)
+          audio.onloadedmetadata = () => resolve(audio.duration)
+          audio.onerror = () => resolve(0)
+        })
+
+        setEncodeStage('Rendering frame…')
+        await document.fonts.ready
+        const canvas = document.createElement('canvas')
+        canvas.width = VIDEO_CANVAS_SIZE
+        canvas.height = VIDEO_CANVAS_SIZE
+        const { renderKaraokeFrame } = await import('../util/renderKaraokeFrame')
+        renderKaraokeFrame(canvas, {
+          arabicText:      dua.arabicText,
+          transliteration: dua.transliteration,
+          translation:     dua.translations[language],
+          topic:           dua.topic,
+          surah:           dua.surah,
+          ayah:            dua.ayah,
+        }, audioDuration)
+
         const frameBlob = await new Promise<Blob>((res, rej) =>
           canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png', 0.9)
         )

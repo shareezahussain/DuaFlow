@@ -77,16 +77,18 @@ interface SharePanelProps {
   encodeStage?: string
   /** True when the device is iOS — shows disclaimer and adjusts button label. */
   isIOS?: boolean
+  /** Hide the video tab entirely (e.g. PrintDesignerPage where video doesn't apply). */
+  hideVideo?: boolean
 
   // Image tab
   onShareImage: (platform: SharePlatform) => void
   imageLoading?: boolean
 
-  // Sing-Along tab
-  videoState: VideoState
-  onGenerateVideo: () => void
-  onShareVideo: (platform: SharePlatform) => void
-  onResetVideo: () => void
+  // Sing-Along tab (not required when hideVideo is true)
+  videoState?: VideoState
+  onGenerateVideo?: () => void
+  onShareVideo?: (platform: SharePlatform) => void
+  onResetVideo?: () => void
   /** Optional slot rendered at the top of the Sing-Along tab (e.g. dua picker). */
   videoPicker?: React.ReactNode
 }
@@ -98,9 +100,10 @@ export default function SharePanel({
   error,
   encodeStage = 'Encoding…',
   isIOS = false,
+  hideVideo = false,
   onShareImage,
   imageLoading = false,
-  videoState,
+  videoState = 'idle',
   onGenerateVideo,
   onShareVideo,
   onResetVideo,
@@ -121,22 +124,24 @@ export default function SharePanel({
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-100">
-        {(['image', 'video'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-              tab === t
-                ? 'text-navy border-b-2 border-navy'
-                : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            {t === 'image' ? '📸 Image' : '🎬 Video'}
-          </button>
-        ))}
-      </div>
+      {/* Tabs — video tab hidden when hideVideo is true */}
+      {!hideVideo && (
+        <div className="flex border-b border-gray-100">
+          {(['image', 'video'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                tab === t
+                  ? 'text-navy border-b-2 border-navy'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {t === 'image' ? '📸 Image' : '🎬 Video'}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="px-5 py-4">
         {error && (
@@ -168,7 +173,7 @@ export default function SharePanel({
         )}
 
         {/* ── Sing-Along tab ── */}
-        {tab === 'video' && (
+        {!hideVideo && tab === 'video' && (
           <>
             {videoPicker}
 

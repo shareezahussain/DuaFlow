@@ -23,8 +23,8 @@ function DuaCard({ dua, onSignIn, onPreview }: { dua: Dua; onSignIn: () => void;
   const [bmLoading, setBmLoading] = useState(false)
 
   async function toggleBookmark() {
-    if (!userToken || bmLoading) return
     if (!userToken) { onSignIn(); return }
+    if (bmLoading) return
     setBmLoading(true)
     try {
       const key = String(dua.id)
@@ -41,9 +41,12 @@ function DuaCard({ dua, onSignIn, onPreview }: { dua: Dua; onSignIn: () => void;
         delete updated[key]
         setBookmarkMap(updated)
       } else {
-        const created = await addBookmark(userToken, dua.surah, dua.ayah)
-        const bmId = created.id
-        if (bmId) setBookmarkMap({ ...bookmarkMap, [key]: bmId })
+        try {
+          const created = await addBookmark(userToken, dua.surah, dua.ayah)
+          if (created.id) setBookmarkMap({ ...bookmarkMap, [key]: created.id })
+        } catch {
+          setBookmarkMap({ ...bookmarkMap, [key]: 'local' })
+        }
       }
     } finally {
       setBmLoading(false)

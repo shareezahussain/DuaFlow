@@ -4,11 +4,6 @@ import { useApp, type Language, type EmojiOverlay } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import { sanitizeDuaFields, sanitizeSearchInput } from '../util/searchUtils'
-import { downloadVideoFile } from '../util/downloadVideo'
-import { decodeAudio } from '../util/decodeAudio'
-import { isMobileDevice, VIDEO_CANVAS_SIZE } from '../util/deviceDetect'
-import { spawnVideoWorker } from '../util/spawnVideoWorker'
-import { toErrorMessage } from '../util/errorMessage'
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
@@ -236,125 +231,6 @@ export default function PrintDesignerPage() {
   const [imageLoading, setImageLoading] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
   const hostedUrlRef = useRef<string | null>(null)
-
-  // ── Video generation ───────────────────────────────────────────────────────
-
-  const [videoState, setVideoState] = useState<'idle' | 'recording' | 'done'>('idle')
-  const [encodeStage, setEncodeStage] = useState('Encoding…')
-  const [videoDuaId, setVideoDuaId] = useState<number | null>(null)
-  const videoBlobRef = useRef<Blob | null>(null)
-  const videoWorkerRef = useRef<Worker | null>(null)
-
-  const generateDesignVideo = async (duaId: number) => {
-    if (videoState === 'recording') return
-    if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
-      setShareError('Video generation requires Chrome on desktop or Android. Not supported on iOS Safari.')
-      return
-    }
-    setShareError(null)
-    setVideoState('recording')
-    setEncodeStage('Starting…')
-    setVideoDuaId(duaId)
-
-    const item = printCollection.find(i => i.dua.id === duaId)
-    if (!item) { setShareError('Dua not in collection'); setVideoState('idle'); return }
-    const dua = item.dua
-
-    function pad(n: number) { return String(n).padStart(3, '0') }
-    const audioUrl = `https://verses.quran.com/Alafasy/mp3/${pad(dua.surah)}${pad(dua.ayah)}.mp3`
-    const trans = language === 'en' ? dua.translations.en : language === 'ur' ? dua.translations.ur : dua.translations.bn
-
-    let decoded: import('../util/decodeAudio').DecodedAudio
-    try {
-      decoded = await decodeAudio(audioUrl)
-    } catch (err) {
-      setShareError(`Could not load audio: ${toErrorMessage(err)}`)
-      setVideoState('idle')
-      return
-    }
-
-    const canvas = document.createElement('canvas')
-    canvas.width = VIDEO_CANVAS_SIZE; canvas.height = VIDEO_CANVAS_SIZE
-    const offscreen = canvas.transferControlToOffscreen()
-
-    spawnVideoWorker(
-      {
-        mode: 'designer',
-        canvas: offscreen,
-        channelData: decoded.channelData,
-        sampleRate: decoded.sampleRate,
-        numberOfChannels: decoded.numberOfChannels,
-        audioDuration: decoded.audioDuration,
-        isMobile: isMobileDevice,
-        arabicText: dua.arabicText,
-        transliteration: dua.transliteration,
-        translation: trans,
-        topic: dua.topic,
-        surah: dua.surah,
-        ayah: dua.ayah,
-        fontFamily,
-        fontSize,
-        fontWeight,
-        arabicColor,
-        translitColor,
-        translationColor,
-        blockBg,
-        accent,
-        showBismillah,
-        showArabic: item.includeArabic,
-        showTranslit: item.includeTransliteration,
-        showTranslation: item.includeTranslation,
-        borderStyle,
-        borderWidth,
-        borderColor,
-        borderRadius,
-        blockAccent,
-        emojiOverlays: emojiOverlays.map(({ emoji, x, y }) => ({ emoji, x, y })),
-      },
-      [offscreen, ...decoded.channelData.map(c => c.buffer)],
-      {
-        workerRef: videoWorkerRef,
-        onDone: (buffer) => {
-          videoBlobRef.current = new Blob([buffer], { type: 'video/mp4' })
-          setVideoState('done')
-        },
-        onError: (msg) => {
-          setShareError(`Could not generate video: ${msg}`)
-          setVideoState('idle')
-        },
-        onProgress: setEncodeStage,
-      },
-    )
-  }
-
-  const downloadDesignVideo = async () => {
-    if (!videoBlobRef.current || videoDuaId === null) return
-    const filename = `rabbana-dua-${videoDuaId}-karaoke.mp4`
-    const err = await downloadVideoFile(videoBlobRef.current, filename, 'DuaFlow Sing-Along')
-    if (err) setShareError(err)
-  }
-
-  const shareDesignVideo = async (platform: SharePlatform) => {
-    if (!videoBlobRef.current || videoDuaId === null) return
-    if (platform === 'twitter') {
-      const d = printCollection.find(i => i.dua.id === videoDuaId)?.dua
-      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${d?.topic ?? ''} — Surah ${d?.surah}:${d?.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
-      return
-    }
-    if (platform === 'share') {
-      const file = new File([videoBlobRef.current], `rabbana-dua-${videoDuaId}-karaoke.mp4`, { type: 'video/mp4' })
-      if (navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ title: 'DuaFlow Sing-Along', files: [file] })
-          return
-        } catch (e) {
-          if ((e as Error).name === 'AbortError') return // user cancelled
-          // share failed — fall through to download
-        }
-      }
-    }
-    downloadDesignVideo()
-  }
 
   // Invalidate cached hosted URL whenever the design changes (set after printHtml useMemo below)
 
@@ -848,24 +724,9 @@ const filteredDuas = duas.filter(d => {
           <SharePanel
             onClose={() => { setShowSharePanel(false); setShareError(null) }}
             error={shareError}
-            encodeStage={encodeStage}
             onShareImage={handleShareImage}
             imageLoading={imageLoading}
-            videoState={videoState}
-            onGenerateVideo={() => generateDesignVideo(videoDuaId ?? printCollection[0]?.dua.id ?? 0)}
-            onShareVideo={platform => shareDesignVideo(platform)}
-            onResetVideo={() => { setVideoState('idle'); videoBlobRef.current = null }}
-            videoPicker={printCollection.length > 1 && videoState !== 'recording' ? (
-              <select
-                value={videoDuaId ?? printCollection[0].dua.id}
-                onChange={e => { setVideoDuaId(Number(e.target.value)); setVideoState('idle'); videoBlobRef.current = null }}
-                className="w-full mb-3 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-navy"
-              >
-                {printCollection.map(i => (
-                  <option key={i.dua.id} value={i.dua.id}>{i.dua.topic}</option>
-                ))}
-              </select>
-            ) : undefined}
+            hideVideo
           />
         </div>
       )}
