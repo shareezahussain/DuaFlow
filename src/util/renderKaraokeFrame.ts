@@ -6,11 +6,10 @@
 
 type Ctx = CanvasRenderingContext2D
 
-const GREEN      = '#1d4c4e'
-const GREEN_PILL = '#e0eeee'
-const BLACK      = '#0d0d0d'
-const GRAY       = '#4a5568'
-const GRAY_MID   = '#718096'
+const GREEN    = '#1d4c4e'
+const BLACK    = '#0d0d0d'
+const GRAY     = '#4a5568'
+const GRAY_MID = '#718096'
 
 function buildRows(
   words: string[], ctx: Ctx, maxW: number, gap: number,
@@ -46,7 +45,7 @@ export function renderKaraokeFrame(
 
   const aFontSize  = Math.round(52 * s)
   const tFontSize  = Math.round(26 * s)
-  const trFontSize = Math.round(20 * s)
+  const trFontSize = Math.max(Math.round(24 * s), 13)
   const aLineH     = aFontSize * 1.9
   const tLineH     = tFontSize * 1.8
   const trLineH    = trFontSize * 1.7
@@ -70,8 +69,8 @@ export function renderKaraokeFrame(
   const tBlockH   = tRows.length * tLineH
   const trLabelH  = Math.round(20 * s)
   const trBlockH  = trRows.length * trLineH + trLabelH
-  const gapAT     = Math.round(30 * s)
-  const gapTTr    = Math.round(18 * s)
+  const gapAT     = Math.max(Math.round(30 * s), 24)
+  const gapTTr    = Math.max(Math.round(18 * s), 14)
   const totalH    = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
   const availableH = H - barH - headerH
   const aStartY   = headerH + Math.round(Math.max(aFontSize * 1.5, (availableH - totalH) / 2))
@@ -113,14 +112,6 @@ export function renderKaraokeFrame(
     }
   })
 
-  // Divider
-  ctx.strokeStyle = '#e2e8f0'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(pad, aStartY + aBlockH + Math.round(12 * s))
-  ctx.lineTo(W - pad, aStartY + aBlockH + Math.round(12 * s))
-  ctx.stroke()
-
   // ── Transliteration ───────────────────────────────────────────────────────
   const tStartY = aStartY + aBlockH + gapAT
   ctx.font = `italic ${tFontSize}px Amiri`
@@ -137,7 +128,7 @@ export function renderKaraokeFrame(
 
   // ── Translation ───────────────────────────────────────────────────────────
   const trStartY = tStartY + tBlockH + gapTTr
-  ctx.font = `bold ${Math.round(12 * s)}px Amiri`
+  ctx.font = `bold ${Math.max(Math.round(14 * s), 10)}px Amiri`
   ctx.fillStyle = GRAY_MID
   ctx.fillText('TRANSLATION', pad, trStartY)
 
@@ -165,19 +156,4 @@ export function renderKaraokeFrame(
   ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - Math.round(20 * s))
   ctx.fillStyle = GREEN; ctx.fillRect(0, H - Math.round(7 * s), W, Math.round(7 * s))
 
-  // Green pill on first Arabic word to hint it's a sing-along
-  if (aRows[0]?.length) {
-    ctx.font = `${aFontSize}px Amiri`
-    ctx.direction = 'rtl'
-    const firstWord = aRows[0][0]
-    const ww = ctx.measureText(firstWord).width + 14
-    const x = W - pad
-    ctx.fillStyle = GREEN_PILL
-    ctx.beginPath()
-    ctx.roundRect(x - ww, aStartY - aFontSize * 0.85, ww, aFontSize * 1.1, 6)
-    ctx.fill()
-    ctx.fillStyle = GREEN
-    ctx.textAlign = 'right'
-    ctx.fillText(firstWord, x, aStartY)
-  }
 }

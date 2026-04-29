@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { exchangeCodeForToken, fetchBookmarks, decodeJwtPayload } from '../services/bookmarksApi'
+import { exchangeCodeForToken } from '../services/bookmarksApi'
 import { useApp } from '../context/AppContext'
-import { RABBANA_META } from '../data/rabbanas'
 
 export default function AuthCallbackPage() {
   const navigate  = useNavigate()
-  const { setUserToken, setRefreshToken, setBookmarkMap, loadUserProfile } = useApp()
+  const { applyAuthTokens } = useApp()
   const [error, setError] = useState<string | null>(null)
   const exchanged = useRef(false)
 
@@ -43,24 +42,8 @@ export default function AuthCallbackPage() {
           return
         }
 
-        // Fallback full-page mode
-        setUserToken(access_token)
-        if (refresh_token) setRefreshToken(refresh_token)
-        const sub = decodeJwtPayload(access_token)?.sub as string | undefined
-        if (sub) loadUserProfile(sub)
-
-        try {
-          const bookmarks = await fetchBookmarks(access_token)
-          const map: Record<string, string> = {}
-          bookmarks.forEach((b) => {
-            if (!b.key || !b.verseNumber || !b.id) return
-            RABBANA_META
-              .filter(m => m.surah === b.key && m.ayah === b.verseNumber)
-              .forEach(m => { map[String(m.id)] = b.id })
-          })
-          setBookmarkMap(map)
-        } catch { /* non-fatal */ }
-
+        // Redirect flow — applyAuthTokens handles tokens, name, bookmarks
+        await applyAuthTokens({ access_token, refresh_token, id_token })
         navigate('/', { replace: true })
       })
       .catch((e: Error) => fail(e.message))

@@ -135,7 +135,7 @@ function makeKaraokeDraw(
 
   const aFontSize  = Math.round(52 * s)
   const tFontSize  = Math.round(26 * s)
-  const trFontSize = Math.round(20 * s)
+  const trFontSize = Math.max(Math.round(24 * s), 13)
   const aLineH     = aFontSize * 1.9
   const tLineH     = tFontSize * 1.8
   const trLineH    = trFontSize * 1.7
@@ -153,8 +153,8 @@ function makeKaraokeDraw(
   const tBlockH  = tRows.length * tLineH
   const trLabelH = Math.round(20 * s)
   const trBlockH = trRows.length * trLineH + trLabelH
-  const gapAT    = Math.round(30 * s)
-  const gapTTr   = Math.round(18 * s)
+  const gapAT    = Math.max(Math.round(30 * s), 24)
+  const gapTTr   = Math.max(Math.round(18 * s), 14)
   const totalContentH = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
 
   // Center content in the space between header and progress bar
@@ -221,14 +221,6 @@ function makeKaraokeDraw(
       })
     })
 
-    // Thin divider under Arabic
-    ctx.strokeStyle = TRACK
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(pad, aStartY + aBlockH + Math.round(12 * s))
-    ctx.lineTo(W - pad, aStartY + aBlockH + Math.round(12 * s))
-    ctx.stroke()
-
     // ── Transliteration ─────────────────────────────────────────────────────
     ctx.font = `italic ${tFontSize}px Amiri`
     ctx.direction = 'ltr'
@@ -261,7 +253,7 @@ function makeKaraokeDraw(
     ctx.textAlign = 'left'
     const trStartY = tStartY + tBlockH + gapTTr
 
-    ctx.font = `bold ${Math.round(12 * s)}px Amiri`
+    ctx.font = `bold ${Math.max(Math.round(14 * s), 10)}px Amiri`
     ctx.fillStyle = GRAY_MID
     ctx.fillText('TRANSLATION', pad, trStartY)
     ctx.font = `${trFontSize}px Amiri`
