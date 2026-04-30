@@ -128,38 +128,47 @@ function makeKaraokeDraw(
   const TRACK      = '#e2e8f0'
 
   // ── Pre-compute layout once (not per frame) ───────────────────────────────
-  const s        = W / 1080
-  const pad      = Math.round(64 * s)
-  const barH     = Math.round(88 * s)
-  const headerH  = Math.round(160 * s)
+  const s      = W / 1080
+  const pad    = Math.round(64 * s)
+  const barH   = Math.round(88 * s)
+  const headerH = Math.round(160 * s)
+  const availableH = H - barH - headerH
 
-  const aFontSize  = Math.round(52 * s)
-  const tFontSize  = Math.round(26 * s)
-  const trFontSize = Math.max(Math.round(24 * s), 13)
-  const aLineH     = aFontSize * 1.9
-  const tLineH     = tFontSize * 1.8
-  const trLineH    = trFontSize * 1.7
+  // Auto-scale: shrink fonts in 5% steps until content fits, down to 60% of base
+  let cs = 1.0 // content scale
+  let aFontSize: number, tFontSize: number, trFontSize: number
+  let aLineH: number, tLineH: number, trLineH: number
+  let aRows: Row[], tRows: Row[], trRows: TrRow[]
+  let aBlockH: number, tBlockH: number, trBlockH: number, gapAT: number, gapTTr: number, totalContentH: number
 
-  ctx.font = `${aFontSize}px Amiri`
-  const aRows = buildRows(aWords, ctx, W - pad * 2, 14).slice(0, 4)
+  do {
+    aFontSize  = Math.max(Math.round(52 * s * cs), 18)
+    tFontSize  = Math.max(Math.round(26 * s * cs), 11)
+    trFontSize = Math.max(Math.round(24 * s * cs), 10)
+    aLineH  = aFontSize * 1.9
+    tLineH  = tFontSize * 1.8
+    trLineH = trFontSize * 1.7
 
-  ctx.font = `italic ${tFontSize}px Amiri`
-  const tRows = buildRows(tWords, ctx, W - pad * 2, 10).slice(0, 3)
+    ctx.font = `${aFontSize}px Amiri`
+    aRows = buildRows(aWords, ctx, W - pad * 2, 14).slice(0, 6)
+    ctx.font = `italic ${tFontSize}px Amiri`
+    tRows = buildRows(tWords, ctx, W - pad * 2, 10).slice(0, 5)
+    ctx.font = `${trFontSize}px Amiri`
+    trRows = buildTrRows(trWords, ctx, W - pad * 2).slice(0, 5)
 
-  ctx.font = `${trFontSize}px Amiri`
-  const trRows = buildTrRows(trWords, ctx, W - pad * 2).slice(0, 3)
+    aBlockH  = aRows.length * aLineH
+    tBlockH  = tRows.length * tLineH
+    const trLabelH = Math.max(Math.round(20 * s * cs), 10)
+    trBlockH = trRows.length * trLineH + trLabelH
+    gapAT    = Math.max(Math.round(30 * s * cs), 16)
+    gapTTr   = Math.max(Math.round(18 * s * cs), 10)
+    totalContentH = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
 
-  const aBlockH  = aRows.length * aLineH
-  const tBlockH  = tRows.length * tLineH
-  const trLabelH = Math.round(20 * s)
-  const trBlockH = trRows.length * trLineH + trLabelH
-  const gapAT    = Math.max(Math.round(30 * s), 24)
-  const gapTTr   = Math.max(Math.round(18 * s), 14)
-  const totalContentH = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
+    if (totalContentH <= availableH * 0.92) break
+    cs -= 0.05
+  } while (cs >= 0.6)
 
-  // Center content in the space between header and progress bar
-  const availableH  = H - barH - headerH
-  const aStartY     = headerH + Math.round(Math.max(aFontSize * 1.5, (availableH - totalContentH) / 2))
+  const aStartY = headerH + Math.round(Math.max(aFontSize * 1.5, (availableH - totalContentH) / 2))
 
   return (t: number) => {
     const wordIdx = wordTimings ? exactWordIndex(wordTimings, t) : propIdx(aWords, t, audioDuration)

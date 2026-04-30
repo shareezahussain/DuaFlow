@@ -11,7 +11,7 @@ import { downloadVideoFile } from '../util/downloadVideo'
 import { generateIOSVideo } from '../util/generateIOSVideo'
 import { toErrorMessage } from '../util/errorMessage'
 import { decodeAudio } from '../util/decodeAudio'
-import { isIOS as deviceIsIOS, isMobileDevice, VIDEO_CANVAS_SIZE } from '../util/deviceDetect'
+import { isIOS as deviceIsIOS, isMobileDevice, VIDEO_W, VIDEO_H } from '../util/deviceDetect'
 import { spawnVideoWorker } from '../util/spawnVideoWorker'
 
 const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
@@ -68,8 +68,7 @@ function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: str
   .translit { font-size:14px; color:#4a5568; font-style:italic; line-height:1.65; margin-bottom:18px; }
   .tr-label { font-size:10px; font-weight:700; color:#718096; letter-spacing:1.2px; text-transform:uppercase; margin-bottom:8px; }
   .translation { font-size:15px; color:#333; line-height:1.75; }
-  .footer { background:#1d4c4e; padding:11px; text-align:center; }
-  .footer span { margin-top:14px;font-size:12px; color:rgba(255,255,255,0.8); }
+  .footer { background:#1d4c4e; padding:12px; text-align:center; font-size:12px; font-weight:700; color:rgba(255,255,255,0.82); letter-spacing:0.3px; }
 </style></head><body>
 <div class="header">
   <div class="bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>
@@ -83,7 +82,7 @@ function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: str
   <div class="tr-label">Translation</div>
   <div class="translation">${translation}</div>
 </div>
-<div class="footer"><span>DuaFlow — Quranic Supplications</span></div>
+<div class="footer">DuaFlow — Quranic Supplications</div>
 </body></html>`
 }
 
@@ -374,8 +373,8 @@ export default function DuaDetailPage() {
         setEncodeStage('Rendering frame…')
         await document.fonts.ready
         const canvas = document.createElement('canvas')
-        canvas.width = VIDEO_CANVAS_SIZE
-        canvas.height = VIDEO_CANVAS_SIZE
+        canvas.width = VIDEO_W
+        canvas.height = VIDEO_H
         const { renderKaraokeFrame } = await import('../util/renderKaraokeFrame')
         renderKaraokeFrame(canvas, {
           arabicText:      dua.arabicText,
@@ -418,7 +417,7 @@ export default function DuaDetailPage() {
     }
 
     const canvas = document.createElement('canvas')
-    canvas.width = VIDEO_CANVAS_SIZE; canvas.height = VIDEO_CANVAS_SIZE
+    canvas.width = VIDEO_W; canvas.height = VIDEO_H
     const offscreen = canvas.transferControlToOffscreen()
 
     spawnVideoWorker(

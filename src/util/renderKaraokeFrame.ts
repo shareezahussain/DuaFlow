@@ -43,37 +43,47 @@ export function renderKaraokeFrame(
   const barH     = Math.round(88 * s)
   const headerH  = Math.round(160 * s)
 
-  const aFontSize  = Math.round(52 * s)
-  const tFontSize  = Math.round(26 * s)
-  const trFontSize = Math.max(Math.round(24 * s), 13)
-  const aLineH     = aFontSize * 1.9
-  const tLineH     = tFontSize * 1.8
-  const trLineH    = trFontSize * 1.7
-
   const aWords  = dua.arabicText.split(' ').filter(w => w.trim())
   const tWords  = dua.transliteration.split(' ').filter(w => w.trim())
   const trWords = dua.translation.split(' ').filter(w => w.trim())
 
-  // Pre-measure rows
-  ctx.font = `${aFontSize}px Amiri`
-  const aRows = buildRows(aWords, ctx, W - pad * 2, 14).slice(0, 4)
-  ctx.font = `italic ${tFontSize}px Amiri`
-  const tRows = buildRows(tWords, ctx, W - pad * 2, 10).slice(0, 3)
-  ctx.font = `${trFontSize}px Amiri`
-  const trRows = buildRows(
-    trWords.map((w, i) => ({ word: w, idx: i })).map(o => o.word),
-    ctx, W - pad * 2, 8,
-  ).slice(0, 3)
-
-  const aBlockH   = aRows.length * aLineH
-  const tBlockH   = tRows.length * tLineH
-  const trLabelH  = Math.round(20 * s)
-  const trBlockH  = trRows.length * trLineH + trLabelH
-  const gapAT     = Math.max(Math.round(30 * s), 24)
-  const gapTTr    = Math.max(Math.round(18 * s), 14)
-  const totalH    = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
   const availableH = H - barH - headerH
-  const aStartY   = headerH + Math.round(Math.max(aFontSize * 1.5, (availableH - totalH) / 2))
+
+  // Auto-scale: shrink fonts in 5% steps until content fits, down to 60% of base
+  let cs = 1.0
+  let aFontSize: number, tFontSize: number, trFontSize: number
+  let aLineH: number, tLineH: number, trLineH: number
+  let aRows: string[][], tRows: string[][], trRows: string[][]
+  let aBlockH: number, tBlockH: number, trBlockH: number, gapAT: number, gapTTr: number, totalH: number
+
+  do {
+    aFontSize  = Math.max(Math.round(52 * s * cs), 18)
+    tFontSize  = Math.max(Math.round(26 * s * cs), 11)
+    trFontSize = Math.max(Math.round(24 * s * cs), 10)
+    aLineH  = aFontSize * 1.9
+    tLineH  = tFontSize * 1.8
+    trLineH = trFontSize * 1.7
+
+    ctx.font = `${aFontSize}px Amiri`
+    aRows = buildRows(aWords, ctx, W - pad * 2, 14).slice(0, 6)
+    ctx.font = `italic ${tFontSize}px Amiri`
+    tRows = buildRows(tWords, ctx, W - pad * 2, 10).slice(0, 5)
+    ctx.font = `${trFontSize}px Amiri`
+    trRows = buildRows(trWords, ctx, W - pad * 2, 8).slice(0, 5)
+
+    aBlockH  = aRows.length * aLineH
+    tBlockH  = tRows.length * tLineH
+    const trLabelH = Math.max(Math.round(20 * s * cs), 10)
+    trBlockH = trRows.length * trLineH + trLabelH
+    gapAT    = Math.max(Math.round(30 * s * cs), 16)
+    gapTTr   = Math.max(Math.round(18 * s * cs), 10)
+    totalH   = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
+
+    if (totalH <= availableH * 0.92) break
+    cs -= 0.05
+  } while (cs >= 0.6)
+
+  const aStartY = headerH + Math.round(Math.max(aFontSize! * 1.5, (availableH - totalH!) / 2))
 
   // ── Background ────────────────────────────────────────────────────────────
   ctx.fillStyle = '#ffffff'
