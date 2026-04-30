@@ -64,11 +64,11 @@ export function renderKaraokeFrame(
     tLineH  = tFontSize * 1.8
     trLineH = trFontSize * 1.7
 
-    ctx.font = `${aFontSize}px Amiri`
+    ctx.font = `${aFontSize}px Georgia, serif`
     aRows = buildRows(aWords, ctx, W - pad * 2, 14).slice(0, 6)
-    ctx.font = `italic ${tFontSize}px Amiri`
+    ctx.font = `italic ${tFontSize}px Georgia, serif`
     tRows = buildRows(tWords, ctx, W - pad * 2, 10).slice(0, 5)
-    ctx.font = `${trFontSize}px Amiri`
+    ctx.font = `${trFontSize}px Georgia, serif`
     trRows = buildRows(trWords, ctx, W - pad * 2, 8).slice(0, 5)
 
     aBlockH  = aRows.length * aLineH
@@ -93,13 +93,13 @@ export function renderKaraokeFrame(
   ctx.fillStyle = GREEN
   ctx.fillRect(0, 0, W, headerH)
 
-  ctx.font = `${Math.round(44 * s)}px Amiri`
+  ctx.font = `${Math.round(44 * s)}px Georgia, serif`
   ctx.fillStyle = '#ffffff'
   ctx.textAlign = 'center'
   ctx.direction = 'rtl'
   ctx.fillText('بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ', W / 2, Math.round(76 * s))
 
-  ctx.font = `bold ${Math.round(22 * s)}px Amiri`
+  ctx.font = `bold ${Math.round(22 * s)}px Georgia, serif`
   ctx.fillStyle = 'rgba(255,255,255,0.82)'
   ctx.textAlign = 'center'
   ctx.direction = 'ltr'
@@ -109,7 +109,7 @@ export function renderKaraokeFrame(
   ctx.fillRect(0, headerH, W, H - headerH)
 
   // ── Arabic (no highlight — static frame) ─────────────────────────────────
-  ctx.font = `${aFontSize}px Amiri`
+  ctx.font = `${aFontSize}px Georgia, serif`
   ctx.direction = 'rtl'
   aRows.forEach((r, ri) => {
     let xCursor = W - pad
@@ -124,7 +124,7 @@ export function renderKaraokeFrame(
 
   // ── Transliteration ───────────────────────────────────────────────────────
   const tStartY = aStartY + aBlockH + gapAT
-  ctx.font = `italic ${tFontSize}px Amiri`
+  ctx.font = `italic ${tFontSize}px Georgia, serif`
   ctx.direction = 'ltr'
   ctx.textAlign = 'left'
   tRows.forEach((r, ri) => {
@@ -138,11 +138,11 @@ export function renderKaraokeFrame(
 
   // ── Translation ───────────────────────────────────────────────────────────
   const trStartY = tStartY + tBlockH + gapTTr
-  ctx.font = `bold ${Math.max(Math.round(14 * s), 10)}px Amiri`
+  ctx.font = `bold ${Math.max(Math.round(14 * s), 10)}px Georgia, serif`
   ctx.fillStyle = GRAY_MID
   ctx.fillText('TRANSLATION', pad, trStartY)
 
-  ctx.font = `${trFontSize}px Amiri`
+  ctx.font = `${trFontSize}px Georgia, serif`
   trRows.forEach((r, ri) => {
     let xCursor = pad
     r.forEach(w => {
@@ -157,12 +157,12 @@ export function renderKaraokeFrame(
   ctx.fillStyle = '#e2e8f0'
   ctx.beginPath(); ctx.roundRect(pad, barY, W - pad * 2, Math.round(6 * s), 3); ctx.fill()
 
-  ctx.font = `${Math.round(18 * s)}px Amiri`; ctx.fillStyle = GRAY_MID; ctx.direction = 'ltr'
+  ctx.font = `${Math.round(18 * s)}px Georgia, serif`; ctx.fillStyle = GRAY_MID; ctx.direction = 'ltr'
   ctx.textAlign = 'left'; ctx.fillText('0:00', pad, barY + Math.round(30 * s))
   ctx.textAlign = 'right'; ctx.fillText(fmt(audioDuration), W - pad, barY + Math.round(30 * s))
 
   // Branding
-  ctx.font = `bold ${Math.round(15 * s)}px Amiri`; ctx.fillStyle = GREEN; ctx.textAlign = 'center'
+  ctx.font = `bold ${Math.round(15 * s)}px Georgia, serif`; ctx.fillStyle = GREEN; ctx.textAlign = 'center'
   ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - Math.round(20 * s))
   ctx.fillStyle = GREEN; ctx.fillRect(0, H - Math.round(7 * s), W, Math.round(7 * s))
 

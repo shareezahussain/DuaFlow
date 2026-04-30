@@ -149,11 +149,11 @@ function makeKaraokeDraw(
     tLineH  = tFontSize * 1.8
     trLineH = trFontSize * 1.7
 
-    ctx.font = `${aFontSize}px Amiri`
+    ctx.font = `${aFontSize}px Georgia, serif`
     aRows = buildRows(aWords, ctx, W - pad * 2, 14).slice(0, 6)
-    ctx.font = `italic ${tFontSize}px Amiri`
+    ctx.font = `italic ${tFontSize}px Georgia, serif`
     tRows = buildRows(tWords, ctx, W - pad * 2, 10).slice(0, 5)
-    ctx.font = `${trFontSize}px Amiri`
+    ctx.font = `${trFontSize}px Georgia, serif`
     trRows = buildTrRows(trWords, ctx, W - pad * 2).slice(0, 5)
 
     aBlockH  = aRows.length * aLineH
@@ -184,14 +184,14 @@ function makeKaraokeDraw(
     ctx.fillRect(0, 0, W, headerH)
 
     // Bismillah — white, inside header
-    ctx.font = `${Math.round(44 * s)}px Amiri`
+    ctx.font = `${Math.round(44 * s)}px Georgia, serif`
     ctx.fillStyle = '#ffffff'
     ctx.textAlign = 'center'
     ctx.direction = 'rtl'
     ctx.fillText('بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ', W / 2, Math.round(76 * s))
 
     // Topic + surah — white, slightly dimmed
-    ctx.font = `bold ${Math.round(22 * s)}px Amiri`
+    ctx.font = `bold ${Math.round(22 * s)}px Georgia, serif`
     ctx.fillStyle = 'rgba(255,255,255,0.82)'
     ctx.textAlign = 'center'
     ctx.direction = 'ltr'
@@ -202,7 +202,7 @@ function makeKaraokeDraw(
     ctx.fillRect(0, headerH, W, H - headerH)
 
     // ── Arabic ──────────────────────────────────────────────────────────────
-    ctx.font = `${aFontSize}px Amiri`
+    ctx.font = `${aFontSize}px Georgia, serif`
     ctx.direction = 'rtl'
 
     let wordGlobalIdx = 0
@@ -231,7 +231,7 @@ function makeKaraokeDraw(
     })
 
     // ── Transliteration ─────────────────────────────────────────────────────
-    ctx.font = `italic ${tFontSize}px Amiri`
+    ctx.font = `italic ${tFontSize}px Georgia, serif`
     ctx.direction = 'ltr'
     ctx.textAlign = 'left'
     const tStartY = aStartY + aBlockH + gapAT
@@ -257,15 +257,15 @@ function makeKaraokeDraw(
     })
 
     // ── Translation ──────────────────────────────────────────────────────────
-    ctx.font = `${trFontSize}px Amiri`
+    ctx.font = `${trFontSize}px Georgia, serif`
     ctx.direction = 'ltr'
     ctx.textAlign = 'left'
     const trStartY = tStartY + tBlockH + gapTTr
 
-    ctx.font = `bold ${Math.max(Math.round(14 * s), 10)}px Amiri`
+    ctx.font = `bold ${Math.max(Math.round(14 * s), 10)}px Georgia, serif`
     ctx.fillStyle = GRAY_MID
     ctx.fillText('TRANSLATION', pad, trStartY)
-    ctx.font = `${trFontSize}px Amiri`
+    ctx.font = `${trFontSize}px Georgia, serif`
 
     trRows.forEach((r, ri) => {
       let xCursor = pad
@@ -295,12 +295,12 @@ function makeKaraokeDraw(
       ctx.beginPath(); ctx.roundRect(pad, barY, (W - pad * 2) * prog, Math.round(6 * s), 3); ctx.fill()
       ctx.beginPath(); ctx.arc(pad + (W - pad * 2) * prog, barY + Math.round(3 * s), Math.round(7 * s), 0, Math.PI * 2); ctx.fill()
     }
-    ctx.font = `${Math.round(18 * s)}px Amiri`; ctx.fillStyle = GRAY_MID; ctx.direction = 'ltr'
+    ctx.font = `${Math.round(18 * s)}px Georgia, serif`; ctx.fillStyle = GRAY_MID; ctx.direction = 'ltr'
     ctx.textAlign = 'left'; ctx.fillText(fmt(t), pad, barY + Math.round(30 * s))
     ctx.textAlign = 'right'; ctx.fillText(fmt(audioDuration), W - pad, barY + Math.round(30 * s))
 
     // Branding + bottom bar
-    ctx.font = `bold ${Math.round(15 * s)}px Amiri`; ctx.fillStyle = GREEN; ctx.textAlign = 'center'
+    ctx.font = `bold ${Math.round(15 * s)}px Georgia, serif`; ctx.fillStyle = GREEN; ctx.textAlign = 'center'
     ctx.fillText('DuaFlow — Quranic Supplications', W / 2, H - Math.round(20 * s))
     ctx.fillStyle = GREEN; ctx.fillRect(0, H - Math.round(7 * s), W, Math.round(7 * s))
   }
@@ -351,7 +351,7 @@ function makeDesignerDraw(
     ctx.globalAlpha = 1
 
     if (showBismillah) {
-      ctx.font = `${Math.round(48 * s)}px Amiri`
+      ctx.font = `${Math.round(48 * s)}px Georgia, serif`
       ctx.fillStyle = accent.v
       ctx.textAlign = 'center'
       ctx.direction = 'rtl'
@@ -387,7 +387,7 @@ function makeDesignerDraw(
     }
 
     const aFontSize = Math.round((fontSize + 20) * s)
-    ctx.font = `${fontWeight} ${aFontSize}px Amiri`
+    ctx.font = `${fontWeight} ${aFontSize}px Georgia, serif`
     ctx.direction = 'rtl'
     const aLineH = aFontSize * 1.9
     const innerPad = Math.round(90 * s)
@@ -525,7 +525,7 @@ async function encode(
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta ?? {}),
     error: e => { encoderError = e },
   })
-  videoEncoder.configure({ codec: 'avc1.4d0028', width: W, height: H, bitrate: isMobile ? 1_500_000 : 4_000_000, framerate: FPS })
+  videoEncoder.configure({ codec: 'avc1.4d0028', width: W, height: H, bitrate: isMobile ? 2_500_000 : 4_000_000, framerate: FPS })
 
   const audioEncoder = new AudioEncoder({
     output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? {}),
@@ -591,15 +591,7 @@ self.onmessage = async (e: MessageEvent<VideoWorkerInput>) => {
   try {
     const { canvas, channelData, sampleRate, numberOfChannels, audioDuration, isMobile } = e.data
 
-    post({ type: 'progress', stage: 'Loading font…' })
-    try {
-      const amiri = new FontFace('Amiri', 'url(https://fonts.gstatic.com/s/amiri/v27/J7aRnpd8CGxBHpUrtLMA7w.woff2)')
-      await amiri.load()
-      ;(self as unknown as { fonts: FontFaceSet }).fonts.add(amiri)
-    } catch {
-      // Font load failed (network/CORS) — canvas will fall back to serif
-    }
-
+    post({ type: 'progress', stage: 'Preparing…' })
     const ctx = canvas.getContext('2d')!
     const W = canvas.width, H = canvas.height
     const d = e.data
