@@ -525,7 +525,7 @@ async function encode(
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta ?? {}),
     error: e => { encoderError = e },
   })
-  videoEncoder.configure({ codec: 'avc1.4d0028', width: W, height: H, bitrate: isMobile ? 2_500_000 : 4_000_000, framerate: FPS })
+  videoEncoder.configure({ codec: 'avc1.4d0028', width: W, height: H, bitrate: 4_000_000, framerate: FPS })
 
   const audioEncoder = new AudioEncoder({
     output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? {}),
