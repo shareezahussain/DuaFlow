@@ -54,7 +54,13 @@ function DuaCard({ dua, onSignIn, onPreview }: { dua: Dua; onSignIn: () => void;
   }
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={onPreview}>
+    <div className="relative bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden" onClick={onPreview}>
+      {/* Background watermark */}
+      <img
+        src="/dua-card-bg.svg"
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 w-full h-full object-contain opacity-[0.04]"
+      />
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <span className="flex-1 text-sm font-semibold text-navy truncate">{dua.topic}</span>

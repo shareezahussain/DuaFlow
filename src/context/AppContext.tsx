@@ -246,6 +246,7 @@ export const useApp = create<AppStore>()(
           localStorage.setItem(`duaflow-user-${userId}`, JSON.stringify({ printCollection, design }))
         }
         ['pkce_verifier', 'pkce_state', 'pkce_nonce', 'pkce_redirect_uri'].forEach(k => localStorage.removeItem(k))
+        localStorage.setItem('qf_force_login', '1')
         set({ userToken: null, refreshToken: null, bookmarkMap: {}, userId: null, userName: null, userPicture: null, printCollection: [], design: DEFAULT_DESIGN })
       },
 

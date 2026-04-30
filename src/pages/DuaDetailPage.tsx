@@ -11,7 +11,7 @@ import { downloadVideoFile } from '../util/downloadVideo'
 import { generateIOSVideo } from '../util/generateIOSVideo'
 import { toErrorMessage } from '../util/errorMessage'
 import { decodeAudio } from '../util/decodeAudio'
-import { isIOS as deviceIsIOS, isMobileDevice, VIDEO_CANVAS_SIZE } from '../util/deviceDetect'
+import { isIOS as deviceIsIOS, isMobileDevice, VIDEO_W, VIDEO_H } from '../util/deviceDetect'
 import { spawnVideoWorker } from '../util/spawnVideoWorker'
 
 const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
@@ -52,39 +52,37 @@ function getAudioUrl(surah: number, ayah: number, reciterId: string) {
 
 function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: string; arabicText: string; transliteration: string; translations: { en: string; ur: string; bn: string } }, lang: 'en' | 'ur' | 'bn') {
   const translation = d.translations[lang]
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  return `
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; }
-  body { font-family:'Amiri',Georgia,serif; background:#f8fafc; }
-  .header { background:#1d4c4e; padding:28px 40px 22px; text-align:center; }
-  .bismillah { font-size:30px; color:#fff; direction:rtl; margin-bottom:10px; }
-  .topic { font-size:22px; font-weight:700; color:#fff; margin-bottom:4px; }
-  .surah-ref { font-size:13px; color:rgba(255,255,255,0.72); }
-  .content { padding:28px 40px 32px; }
-  .arabic { font-size:28px; color:#0d0d0d; line-height:1.95; text-align:right; direction:rtl; margin-bottom:18px; }
-  .divider { height:1px; background:#e2e8f0; margin-bottom:16px; }
-  .translit { font-size:14px; color:#4a5568; font-style:italic; line-height:1.65; margin-bottom:18px; }
-  .tr-label { font-size:10px; font-weight:700; color:#718096; letter-spacing:1.2px; text-transform:uppercase; margin-bottom:8px; }
-  .translation { font-size:15px; color:#333; line-height:1.75; }
-  .footer { background:#1d4c4e; padding:11px; text-align:center; }
-  .footer span { margin-top:14px;font-size:12px; color:rgba(255,255,255,0.8); }
-</style></head><body>
-<div class="header">
-  <div class="bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>
-  <div class="topic">${d.topic}</div>
-  <div class="surah-ref">Surah ${d.surah}:${d.ayah}</div>
-</div>
-<div class="content">
-  <div class="arabic">${d.arabicText}</div>
-  <div class="divider"></div>
-  <div class="translit">${d.transliteration}</div>
-  <div class="tr-label">Translation</div>
-  <div class="translation">${translation}</div>
-</div>
-<div class="footer"><span>DuaFlow — Quranic Supplications</span></div>
-</body></html>`
+  .pcard { font-family:Georgia,serif; background:#f8fafc; width:700px; }
+  .pcard-header { background:#1d4c4e; padding:28px 40px 22px; text-align:center; }
+  .pcard-bismillah { font-size:30px; color:#fff; direction:rtl; margin-bottom:10px; }
+  .pcard-topic { font-size:22px; font-weight:700; color:#fff; margin-bottom:4px; }
+  .pcard-ref { font-size:13px; color:rgba(255,255,255,0.72); }
+  .pcard-body { padding:28px 40px 32px; }
+  .pcard-arabic { font-size:28px; color:#0d0d0d; line-height:1.95; text-align:right; direction:rtl; margin-bottom:18px; }
+  .pcard-divider { height:1px; background:#e2e8f0; margin-bottom:16px; }
+  .pcard-translit { font-size:14px; color:#4a5568; font-style:italic; line-height:1.65; margin-bottom:18px; }
+  .pcard-tr-label { font-size:10px; font-weight:700; color:#718096; letter-spacing:1.2px; text-transform:uppercase; margin-bottom:8px; }
+  .pcard-translation { font-size:15px; color:#333; line-height:1.75; }
+  .pcard-footer { background:#1d4c4e; padding:12px; text-align:center; font-size:12px; font-weight:700; color:rgba(255,255,255,0.82); letter-spacing:0.3px; }
+</style>
+<div class="pcard">
+  <div class="pcard-header">
+    <div class="pcard-bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>
+    <div class="pcard-topic">${d.topic}</div>
+    <div class="pcard-ref">Surah ${d.surah}:${d.ayah}</div>
+  </div>
+  <div class="pcard-body">
+    <div class="pcard-arabic">${d.arabicText}</div>
+    <div class="pcard-divider"></div>
+    <div class="pcard-translit">${d.transliteration}</div>
+    <div class="pcard-tr-label">Translation</div>
+    <div class="pcard-translation">${translation}</div>
+  </div>
+  <div class="pcard-footer">DuaFlow — Quranic Supplications</div>
+</div>`
 }
 
 export default function DuaDetailPage() {
@@ -306,7 +304,8 @@ export default function DuaDetailPage() {
       div.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;'
       div.innerHTML = buildPrintHtml(dua, language)
       document.body.appendChild(div)
-      const canvas = await h2c(div, { scale: 2, useCORS: true, backgroundColor: '#f8fafc', width: 700 })
+      const scale = isMobileDevice ? 1.5 : 2
+      const canvas = await h2c(div, { scale, useCORS: true, backgroundColor: '#f8fafc', width: 700, windowWidth: 700 })
       document.body.removeChild(div)
       const blob = await new Promise<Blob>((res, rej) =>
         canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png', 1)
@@ -374,8 +373,8 @@ export default function DuaDetailPage() {
         setEncodeStage('Rendering frame…')
         await document.fonts.ready
         const canvas = document.createElement('canvas')
-        canvas.width = VIDEO_CANVAS_SIZE
-        canvas.height = VIDEO_CANVAS_SIZE
+        canvas.width = VIDEO_W
+        canvas.height = VIDEO_H
         const { renderKaraokeFrame } = await import('../util/renderKaraokeFrame')
         renderKaraokeFrame(canvas, {
           arabicText:      dua.arabicText,
@@ -418,7 +417,7 @@ export default function DuaDetailPage() {
     }
 
     const canvas = document.createElement('canvas')
-    canvas.width = VIDEO_CANVAS_SIZE; canvas.height = VIDEO_CANVAS_SIZE
+    canvas.width = VIDEO_W; canvas.height = VIDEO_H
     const offscreen = canvas.transferControlToOffscreen()
 
     spawnVideoWorker(

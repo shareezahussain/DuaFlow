@@ -70,6 +70,9 @@ export async function startLogin(): Promise<LoginResult> {
   localStorage.setItem('pkce_nonce',        nonce);
   localStorage.setItem('pkce_redirect_uri', redirectUri);
 
+  const forceLogin = localStorage.getItem('qf_force_login') === '1'
+  if (forceLogin) localStorage.removeItem('qf_force_login')
+
   const params = new URLSearchParams({
     response_type:         'code',
     client_id:             CLIENT_ID,
@@ -79,6 +82,7 @@ export async function startLogin(): Promise<LoginResult> {
     nonce,
     code_challenge:        challenge,
     code_challenge_method: 'S256',
+    ...(forceLogin && { prompt: 'login' }),
   });
 
   const authUrl = `${OAUTH_AUTH}?${params.toString()}`;
