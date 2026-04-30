@@ -67,7 +67,7 @@ export default function DuaPreviewModal({ dua, onClose, onSignIn }: Props) {
             >
               {bmLoading
                 ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" />
-                : '🔖'}
+                : bm ? '🔖' : '🏷'}
               <span className="text-xs font-medium">{bm ? 'Saved' : 'Save'}</span>
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
