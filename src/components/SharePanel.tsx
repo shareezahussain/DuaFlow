@@ -55,7 +55,7 @@ const PLATFORMS: Array<{
   {
     key:   'share',
     label: 'More',
-    bg:    'bg-navy hover:bg-navy-dark',
+    bg:    'bg-green hover:bg-green-dark',
     icon:  () => (
       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
         <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
@@ -133,7 +133,7 @@ export default function SharePanel({
               onClick={() => setTab(t)}
               className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
                 tab === t
-                  ? 'text-navy border-b-2 border-navy'
+                  ? 'text-green border-b-2 border-green'
                   : 'text-gray-400 hover:text-gray-600'
               }`}
             >
@@ -189,7 +189,7 @@ export default function SharePanel({
             {videoState === 'idle' && (
               <button
                 onClick={onGenerateVideo}
-                className="w-full py-2.5 rounded-xl bg-navy hover:bg-navy-light text-white font-bold text-sm transition-colors"
+                className="w-full py-2.5 rounded-xl bg-green hover:bg-green-light text-white font-bold text-sm transition-colors"
               >
                 {isIOS ? '🎬 Generate Video (Static)' : '🎬 Generate Video'}
               </button>
@@ -197,7 +197,7 @@ export default function SharePanel({
 
             {videoState === 'recording' && (
               <div className="flex flex-col items-center gap-2 py-3">
-                <span className="w-6 h-6 border-2 border-navy border-t-transparent rounded-full animate-spin" />
+                <span className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
                 <span className="text-sm text-gray-500 font-medium">{encodeStage}</span>
                 <span className="text-xs text-gray-400">May take longer on mobile</span>
               </div>

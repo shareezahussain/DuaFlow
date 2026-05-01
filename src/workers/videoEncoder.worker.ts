@@ -60,6 +60,10 @@ export type VideoWorkerOutput =
   | { type: 'done'; buffer: ArrayBuffer }
   | { type: 'error'; message: string }
 
+const SCALE_MIN       = 0.6
+const SCALE_STEP      = 0.05
+const FIT_THRESHOLD   = 0.92
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function exactWordIndex(timings: WordTiming[], t: number): number {
@@ -164,9 +168,9 @@ function makeKaraokeDraw(
     gapTTr   = Math.max(Math.round(18 * s * cs), 10)
     totalContentH = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
 
-    if (totalContentH <= availableH * 0.92) break
-    cs -= 0.05
-  } while (cs >= 0.6)
+    if (totalContentH <= availableH * FIT_THRESHOLD) break
+    cs -= SCALE_STEP
+  } while (cs >= SCALE_MIN)
 
   const aStartY = headerH + Math.round(Math.max(aFontSize * 1.5, (availableH - totalContentH) / 2))
 

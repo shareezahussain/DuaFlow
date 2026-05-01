@@ -59,7 +59,7 @@ export const DEFAULT_DESIGN: DesignSettings = {
   fontSize: 18,
   fontFamily: "'Amiri', Georgia, serif",
   fontWeight: "400",
-  accent: { l: "Navy", v: "#1a5276", t: "#fff" },
+  accent: { l: "green", v: "#1a5276", t: "#fff" },
   arabicColor: "#1a2749",
   translitColor: "#555555",
   translationColor: "#111111",
@@ -215,8 +215,7 @@ export const useApp = create<AppStore>()(
           const map: Record<string, string> = {}
           bookmarks.forEach(b => {
             if (!b.key || !b.verseNumber || !b.id) return
-            RABBANA_META
-              .filter(m => m.surah === b.key && m.ayah === b.verseNumber)
+            RABBANA_META.filter(m => m.surah === b.key && m.ayah === b.verseNumber)
               .forEach(m => { map[String(m.id)] = b.id })
           })
           set({ bookmarkMap: map })

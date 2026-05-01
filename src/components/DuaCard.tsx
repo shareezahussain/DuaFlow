@@ -1,8 +1,7 @@
-import { useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { Dua } from '../data/rabbanas'
 import { useApp } from '../context/AppContext'
-import { addBookmark, removeBookmark } from '../services/bookmarksApi'
+import { useBookmarkToggle } from '../hooks/useBookmarkToggle'
 
 interface DuaCardProps {
   dua: Dua
@@ -11,44 +10,10 @@ interface DuaCardProps {
 }
 
 export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
-  const {
-    language,
-    addToPrint,
-    removeFromPrint,
-    isInPrint,
-    isBookmarked,
-    bookmarkMap,
-    setBookmarkMap,
-    userToken,
-  } = useApp()
+  const { language, addToPrint, removeFromPrint, isInPrint } = useApp()
+  const { isBookmarked: bm, isLoading: bmLoading, showSparkle, toggle: toggleBookmark } = useBookmarkToggle(dua, onSignIn)
 
   const inPrint = isInPrint(dua.id)
-  const bm = isBookmarked(dua.id)
-  const key = String(dua.id)
-  const [bmLoading, setBmLoading] = useState(false)
-
-  const toggleBookmark = useCallback(async () => {
-    if (!userToken) { onSignIn(); return }
-    if (bmLoading) return
-    setBmLoading(true)
-    try {
-      if (bm) {
-        const bmId = bookmarkMap[key]
-        if (bmId) await removeBookmark(userToken, bmId).catch(() => {})
-        const { [key]: _, ...rest } = bookmarkMap
-        setBookmarkMap(rest)
-      } else {
-        try {
-          const created = await addBookmark(userToken, dua.surah, dua.ayah)
-          if (created.id) setBookmarkMap({ ...bookmarkMap, [key]: created.id })
-        } catch {
-          setBookmarkMap({ ...bookmarkMap, [key]: 'local' })
-        }
-      }
-    } finally {
-      setBmLoading(false)
-    }
-  }, [userToken, bmLoading, bm, bookmarkMap, key, dua.surah, dua.ayah, onSignIn, setBookmarkMap])
 
   return (
     <div
@@ -62,9 +27,20 @@ export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
       />
 
       <div className="flex items-center gap-2 mb-3">
-        <span className="flex-1 text-sm font-semibold text-navy truncate">{dua.topic}</span>
+        <span className="flex-1 text-sm font-semibold text-green truncate">{dua.topic}</span>
 
         <div className="relative group" onClick={e => e.stopPropagation()}>
+          {showSparkle && (
+            <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+              {[0,1,2,3,4].map(i => (
+                <span
+                  key={i}
+                  className="sparkle-dot absolute w-1 h-1 rounded-full bg-gold"
+                  style={{ top: '50%', left: '50%', '--angle': `${i * 72}deg`, animationDelay: `${i * 0.05}s` } as React.CSSProperties}
+                />
+              ))}
+            </span>
+          )}
           <button
             onClick={toggleBookmark}
             disabled={bmLoading}
@@ -87,7 +63,7 @@ export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
         </span>
       </div>
 
-      <p className="arabic text-xl text-right text-navy-dark leading-loose mb-1 line-clamp-2">
+      <p className="arabic text-xl text-right text-green-dark leading-loose mb-1 line-clamp-2">
         {dua.arabicText}
       </p>
 
@@ -102,8 +78,8 @@ export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
           onClick={() => inPrint ? removeFromPrint(dua.id) : addToPrint(dua)}
           className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
             inPrint
-              ? 'bg-navy text-white border-navy'
-              : 'text-navy border-navy hover:bg-navy hover:text-white'
+              ? 'bg-green text-white border-green'
+              : 'text-green border-green hover:bg-green hover:text-white'
           }`}
         >
           {inPrint ? '✓ In Print' : '+ Add to Print'}

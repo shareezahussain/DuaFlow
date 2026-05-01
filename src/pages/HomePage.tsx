@@ -72,17 +72,17 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
-      <header className="bg-navy sticky top-0 z-10 shadow-md">
+      <header className="bg-green sticky top-0 z-10 shadow-md">
         <div className="max-w-6xl mx-auto px-4 py-4 flex max-[420px]:flex-col items-center max-[420px]:items-start justify-between max-[420px]:justify-start gap-0 max-[420px]:gap-[1rem]">
           <div>
             <h1 className="text-white text-2xl font-bold tracking-wide"><a href="/">Tadafuq Al-Du'aa</a></h1>
-            <p className="text-navy-muted text-xs mt-0.5">Quranic Supplications</p>
+            <p className="text-white/75 text-xs mt-0.5">Quranic Supplications</p>
           </div>
 
           <div className="flex items-center gap-2 max-[420px]:flex-row-reverse">
             <button
               onClick={() => setShowPrintCart(true)}
-              className="bg-navy-light hover:bg-navy-default text-white font-bold text-xs w-[60px] h-[34px] rounded-full transition-colors flex items-center justify-center gap-1"
+              className="bg-white hover:bg-gray-100 text-gold-dark font-bold text-xs w-[60px] h-[34px] rounded-full transition-colors flex items-center justify-center gap-1"
             >
               🖨 {printCollection.length}
             </button>
@@ -91,7 +91,7 @@ export default function HomePage() {
               <>
                 <button
                   onClick={() => setShowBookmarks(true)}
-                  className="bg-gold hover:bg-gold-dark text-white font-bold text-xs w-[60px] h-[34px] rounded-full transition-colors flex items-center justify-center gap-1"
+                  className="bg-white hover:bg-gray-100 text-gold-dark font-bold text-xs w-[60px] h-[34px] rounded-full transition-colors flex items-center justify-center gap-1"
                 >
                   🔖 {bookmarkCount}
                 </button>
@@ -100,7 +100,7 @@ export default function HomePage() {
                 <div className="relative">
                   <button
                     onClick={() => setShowUserMenu(v => !v)}
-                    className="flex items-center gap-2 text-white text-xs font-medium px-3 py-1.5 rounded-full border border-navy-light hover:border-white hover:bg-navy-light transition-colors"
+                    className="flex items-center gap-2 text-white text-xs font-medium px-3 py-1.5 rounded-full border border-green-light hover:border-white hover:bg-green-light transition-colors"
                   >
                     {userPicture && (
                       <img src={userPicture} alt="" className="w-5 h-5 rounded-full object-cover" />
@@ -113,7 +113,7 @@ export default function HomePage() {
                       <div className="fixed inset-0 z-10" onClick={() => setShowUserMenu(false)} />
                       <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[180px] z-20 max-[420px]:left-[0.5rem]">
                         <div className="px-4 py-2 border-b border-gray-100">
-                          <p className="text-xs font-semibold text-navy truncate">{userName ?? 'Signed in'}</p>
+                          <p className="text-xs font-semibold text-green truncate">{userName ?? 'Signed in'}</p>
                         </div>
                         <button
                           onClick={() => { setShowBookmarks(true); setShowUserMenu(false) }}
@@ -145,7 +145,7 @@ export default function HomePage() {
             ) : (
               <button
                 onClick={() => setShowSignIn(true)}
-                className="bg-gold hover:bg-gold-dark text-white font-bold text-xs px-3 py-1.5 rounded-full transition-colors"
+                className="bg-white hover:bg-gray-100 text-gold-dark font-bold text-xs px-3 py-1.5 rounded-full transition-colors"
               >
                 🔖 Sign in
               </button>
@@ -161,8 +161,8 @@ export default function HomePage() {
               onClick={() => setLanguage(lang)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                 language === lang
-                  ? 'bg-gold border-gold text-white font-bold'
-                  : 'border-navy-light text-navy-muted hover:border-white hover:text-white'
+                  ? 'bg-white border-white text-gold-dark font-bold'
+                  : 'border-white/30 text-white/70 hover:border-white hover:text-white'
               }`}
             >
               {LANG_LABELS[lang]}
@@ -179,7 +179,7 @@ export default function HomePage() {
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
             placeholder="Search by topic, dua, or translation…"
-            className="w-full bg-white rounded-xl px-4 py-3 pr-10 shadow-sm text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-navy"
+            className="w-full bg-white rounded-xl px-4 py-3 pr-10 shadow-sm text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green"
           />
           {search && (
             <button
@@ -218,7 +218,7 @@ export default function HomePage() {
             <p className="text-gray-500">Failed to load duas</p>
             <button
               onClick={retry}
-              className="px-6 py-2 bg-navy text-white rounded-full text-sm font-semibold hover:bg-navy-light"
+              className="px-6 py-2 bg-green text-white rounded-full text-sm font-semibold hover:bg-green-light"
             >
               Retry
             </button>
@@ -249,7 +249,7 @@ export default function HomePage() {
                     <button
                       onClick={() => { setPage(p => p - 1); window.scrollTo(0, 0) }}
                       disabled={page === 1}
-                      className="px-4 py-2 rounded-xl border border-navy text-navy text-sm font-semibold disabled:opacity-30 hover:bg-navy hover:text-white transition-colors"
+                      className="px-4 py-2 rounded-xl border border-green text-green text-sm font-semibold disabled:opacity-30 hover:bg-green hover:text-white transition-colors"
                     >
                       ← Prev
                     </button>
@@ -260,8 +260,8 @@ export default function HomePage() {
                         onClick={() => { setPage(p); window.scrollTo(0, 0) }}
                         className={`w-9 h-9 rounded-xl text-sm font-bold transition-colors ${
                           p === page
-                            ? 'bg-navy text-white'
-                            : 'border border-gray-200 text-gray-500 hover:border-navy hover:text-navy'
+                            ? 'bg-green text-white'
+                            : 'border border-gray-200 text-gray-500 hover:border-green hover:text-green'
                         }`}
                       >
                         {p}
@@ -271,7 +271,7 @@ export default function HomePage() {
                     <button
                       onClick={() => { setPage(p => p + 1); window.scrollTo(0, 0) }}
                       disabled={page === totalPages}
-                      className="px-4 py-2 rounded-xl border border-navy text-navy text-sm font-semibold disabled:opacity-30 hover:bg-navy hover:text-white transition-colors"
+                      className="px-4 py-2 rounded-xl border border-green text-green text-sm font-semibold disabled:opacity-30 hover:bg-green hover:text-white transition-colors"
                     >
                       Next →
                     </button>
@@ -301,7 +301,7 @@ export default function HomePage() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2">
           <Link
             to="/print"
-            className="bg-navy hover:bg-navy-light text-white font-bold px-8 py-4 rounded-full shadow-2xl text-sm transition-colors whitespace-nowrap"
+            className="bg-green hover:bg-green-light text-white font-bold px-8 py-4 rounded-full shadow-2xl text-sm transition-colors whitespace-nowrap"
           >
             🖨 Design &amp; Print ({printCollection.length})
           </Link>

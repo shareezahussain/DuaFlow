@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { RABBANA_META, Dua } from '../data/rabbanas';
 import { fetchVerseContentBatch } from '../services/quranApi';
 
@@ -74,8 +74,11 @@ export function QuranContentProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [tick]);
 
+  const retry = useCallback(() => setTick(t => t + 1), [])
+  const value = useMemo(() => ({ duas, isLoading, error, retry }), [duas, isLoading, error, retry])
+
   return (
-    <QuranContentContext.Provider value={{ duas, isLoading, error, retry: () => setTick(t => t + 1) }}>
+    <QuranContentContext.Provider value={value}>
       {children}
     </QuranContentContext.Provider>
   );

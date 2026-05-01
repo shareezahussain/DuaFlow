@@ -4,77 +4,77 @@ import { useApp, type Language, type EmojiOverlay } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import { sanitizeDuaFields, sanitizeSearchInput } from '../util/searchUtils'
+import { LANG_LABELS } from '../util/constants'
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
-const FONT_SIZES    = [{ l: 'S', v: 14 }, { l: 'M', v: 18 }, { l: 'L', v: 22 }]
-const FONT_WEIGHTS  = [{ l: 'Normal', v: '400' }, { l: 'Bold', v: '700' }, { l: 'Heavy', v: '900' }]
+const FONT_SIZES = [{ l: 'S', v: 14 }, { l: 'M', v: 18 }, { l: 'L', v: 22 }]
+const FONT_WEIGHTS = [{ l: 'Normal', v: '400' }, { l: 'Bold', v: '700' }, { l: 'Heavy', v: '900' }]
 const FONT_FAMILIES = [
-  { l: 'Serif',  v: "'Amiri', Georgia, serif" },
-  { l: 'Sans',   v: 'Arial, Helvetica, sans-serif' },
-  { l: 'Mono',   v: "'Courier New', Courier, monospace" },
+  { l: 'Serif', v: "'Amiri', Georgia, serif" },
+  { l: 'Sans', v: 'Arial, Helvetica, sans-serif' },
+  { l: 'Mono', v: "'Courier New', Courier, monospace" },
 ]
 const ACCENT_COLORS = [
-  { l: 'Navy',   v: '#1a5276', t: '#fff' },
-  { l: 'Green',  v: '#1e8449', t: '#fff' },
+  { l: 'green', v: '#1a5276', t: '#fff' },
+  { l: 'Green', v: '#1e8449', t: '#fff' },
   { l: 'Purple', v: '#6c3483', t: '#fff' },
-  { l: 'Gold',   v: '#b7950b', t: '#fff' },
+  { l: 'Gold', v: '#b7950b', t: '#fff' },
   { l: 'Maroon', v: '#78281f', t: '#fff' },
-  { l: 'Teal',   v: '#117a65', t: '#fff' },
+  { l: 'Teal', v: '#117a65', t: '#fff' },
 ]
-const TEXT_COLORS     = ['#111111', '#1a2749', '#145a32', '#4a235a', '#555555', '#7b241c']
-const BORDER_STYLES   = [{ l: 'None', v: 'none' }, { l: 'Solid', v: 'solid' }, { l: 'Dashed', v: 'dashed' }, { l: 'Dotted', v: 'dotted' }]
-const BORDER_WIDTHS   = [{ l: '1', v: 1 }, { l: '2', v: 2 }, { l: '3', v: 3 }, { l: '4', v: 4 }]
-const BORDER_RADII    = [{ l: 'Sharp', v: 0 }, { l: 'Round', v: 8 }, { l: 'Pill', v: 20 }]
-const BLOCK_ACCENTS   = [{ l: 'Left bar', v: 'left-bar' }, { l: 'Top bar', v: 'top-bar' }, { l: 'Full border', v: 'full-border' }, { l: 'None', v: 'none' }]
+const TEXT_COLORS = ['#111111', '#1a2749', '#145a32', '#4a235a', '#555555', '#7b241c']
+const BORDER_STYLES = [{ l: 'None', v: 'none' }, { l: 'Solid', v: 'solid' }, { l: 'Dashed', v: 'dashed' }, { l: 'Dotted', v: 'dotted' }]
+const BORDER_WIDTHS = [{ l: '1', v: 1 }, { l: '2', v: 2 }, { l: '3', v: 3 }, { l: '4', v: 4 }]
+const BORDER_RADII = [{ l: 'Sharp', v: 0 }, { l: 'Round', v: 8 }, { l: 'Pill', v: 20 }]
+const BLOCK_ACCENTS = [{ l: 'Left bar', v: 'left-bar' }, { l: 'Top bar', v: 'top-bar' }, { l: 'Full border', v: 'full-border' }, { l: 'None', v: 'none' }]
 const ORIENTATION_OPTIONS = [{ l: '📄 Portrait', v: 'portrait' }, { l: '🖼 Landscape', v: 'landscape' }]
 const SPACING_OPTIONS = [{ l: 'Compact', v: 'compact' }, { l: 'Normal', v: 'normal' }, { l: 'Spacious', v: 'spacious' }]
 const BLOCK_BG_COLORS = ['#ffffff', '#fafafa', '#f5f5f5', '#eef2f7', '#fdf6ec', '#fffde7']
-const LANG_LABELS: Record<Language, string> = { en: 'English', ur: 'اردو', bn: 'বাংলা' }
 
 // ── Topic-based emoji suggestions (objects only, no faces) ────────────────────
 
 const TOPIC_EMOJIS: Record<string, string[]> = {
-  'Acceptance of Deeds':             ['🕌', '📿', '✨', '⭐', '🌟'],
-  'Submission & Repentance':         ['🕋', '💧', '🌙', '📿', '🌊'],
-  'Goodness in Both Worlds':         ['⭐', '🌿', '⚖️', '🌟', '💎'],
-  'Patience & Victory':              ['🏔️', '🛡️', '⚔️', '🌊', '⭐'],
-  'Steadfastness in Faith':          ['🏔️', '⭐', '🌱', '📿', '💎'],
-  'Day of Judgment':                 ['⚖️', '🌅', '📜', '🌟', '⭐'],
-  'Forgiveness':                     ['🌸', '💧', '🕊️', '🌿', '✨'],
-  'Forgiveness & Victory':           ['🕊️', '⚔️', '🛡️', '🌸', '✨'],
-  'Reflection & Protection':         ['🌙', '⭐', '🏔️', '💎', '🌊'],
-  'Fear of Hellfire':                ['🛡️', '🔥', '💎', '🌊', '⭐'],
-  'Forgiveness & Righteous Death':   ['🕊️', '🌸', '📿', '🌿', '💧'],
-  'Fulfillment of Promise':          ['📜', '⭐', '🌟', '💎', '🏆'],
-  'Repentance & Mercy':              ['💧', '🌿', '🕌', '🌱', '🌸'],
-  'Justice & Truth':                 ['⚖️', '⚔️', '📜', '🌟', '💎'],
-  'Protection from Oppressors':      ['🛡️', '⚔️', '🏔️', '⭐', '💪'],
-  "Allah's Knowledge":               ['📖', '⭐', '🌟', '🔭', '💡'],
-  'Prayer & Acceptance of Dua':      ['🕌', '📿', '🌙', '⭐', '✨'],
+  'Acceptance of Deeds': ['🕌', '📿', '✨', '⭐', '🌟'],
+  'Submission & Repentance': ['🕋', '💧', '🌙', '📿', '🌊'],
+  'Goodness in Both Worlds': ['⭐', '🌿', '⚖️', '🌟', '💎'],
+  'Patience & Victory': ['🏔️', '🛡️', '⚔️', '🌊', '⭐'],
+  'Steadfastness in Faith': ['🏔️', '⭐', '🌱', '📿', '💎'],
+  'Day of Judgment': ['⚖️', '🌅', '📜', '🌟', '⭐'],
+  'Forgiveness': ['🌸', '💧', '🕊️', '🌿', '✨'],
+  'Forgiveness & Victory': ['🕊️', '⚔️', '🛡️', '🌸', '✨'],
+  'Reflection & Protection': ['🌙', '⭐', '🏔️', '💎', '🌊'],
+  'Fear of Hellfire': ['🛡️', '🔥', '💎', '🌊', '⭐'],
+  'Forgiveness & Righteous Death': ['🕊️', '🌸', '📿', '🌿', '💧'],
+  'Fulfillment of Promise': ['📜', '⭐', '🌟', '💎', '🏆'],
+  'Repentance & Mercy': ['💧', '🌿', '🕌', '🌱', '🌸'],
+  'Justice & Truth': ['⚖️', '⚔️', '📜', '🌟', '💎'],
+  'Protection from Oppressors': ['🛡️', '⚔️', '🏔️', '⭐', '💪'],
+  "Allah's Knowledge": ['📖', '⭐', '🌟', '🔭', '💡'],
+  'Prayer & Acceptance of Dua': ['🕌', '📿', '🌙', '⭐', '✨'],
   'Forgiveness for Parents & Believers': ['🌸', '💧', '🌿', '📿', '🕊️'],
-  'Truthful Entry & Exit':           ['🚪', '🌟', '⭐', '📜', '✨'],
-  'Mercy & Guidance':                ['🌿', '💧', '🕊️', '⭐', '🌱'],
-  'Increase in Knowledge':           ['📖', '🌟', '💡', '⭐', '📚'],
-  'Protection from Shaytan':         ['🛡️', '🔒', '🏔️', '⭐', '💎'],
-  'Faith & Mercy':                   ['🌸', '💧', '🌿', '📿', '🕊️'],
-  'Protection from Hellfire':        ['🛡️', '🔥', '🌊', '💎', '⭐'],
-  'Righteous Family':                ['🌿', '🌸', '🌱', '⭐', '💎'],
-  'Wisdom & Righteousness':          ['📖', '⭐', '💡', '🌟', '⚖️'],
-  'Gratitude & Righteousness':       ['🌿', '🌸', '⭐', '💫', '✨'],
-  'Seeking Forgiveness':             ['💧', '🌿', '🕊️', '🌸', '📿'],
-  'Help Against Corruptors':         ['🛡️', '⚔️', '🏔️', '⭐', '💪'],
-  'Mercy & Forgiveness':             ['🌿', '💧', '🕊️', '🌸', '✨'],
-  'Entry into Paradise':             ['🌟', '⭐', '🌿', '💎', '🚪'],
-  'Protection from Sin':             ['🛡️', '🔒', '📿', '⭐', '💎'],
+  'Truthful Entry & Exit': ['🚪', '🌟', '⭐', '📜', '✨'],
+  'Mercy & Guidance': ['🌿', '💧', '🕊️', '⭐', '🌱'],
+  'Increase in Knowledge': ['📖', '🌟', '💡', '⭐', '📚'],
+  'Protection from Shaytan': ['🛡️', '🔒', '🏔️', '⭐', '💎'],
+  'Faith & Mercy': ['🌸', '💧', '🌿', '📿', '🕊️'],
+  'Protection from Hellfire': ['🛡️', '🔥', '🌊', '💎', '⭐'],
+  'Righteous Family': ['🌿', '🌸', '🌱', '⭐', '💎'],
+  'Wisdom & Righteousness': ['📖', '⭐', '💡', '🌟', '⚖️'],
+  'Gratitude & Righteousness': ['🌿', '🌸', '⭐', '💫', '✨'],
+  'Seeking Forgiveness': ['💧', '🌿', '🕊️', '🌸', '📿'],
+  'Help Against Corruptors': ['🛡️', '⚔️', '🏔️', '⭐', '💪'],
+  'Mercy & Forgiveness': ['🌿', '💧', '🕊️', '🌸', '✨'],
+  'Entry into Paradise': ['🌟', '⭐', '🌿', '💎', '🚪'],
+  'Protection from Sin': ['🛡️', '🔒', '📿', '⭐', '💎'],
   'Gratitude & Righteous Offspring': ['🌿', '🌸', '🌱', '⭐', '💎'],
-  'Forgiveness for All Believers':   ['💧', '🌸', '🕊️', '🌿', '✨'],
-  'Trust in Allah':                  ['🏔️', '⭐', '🌟', '📿', '💎'],
-  'Protection from Fitnah':          ['🛡️', '🔒', '🏔️', '⭐', '⚔️'],
-  'Light & Forgiveness':             ['✨', '💡', '🌟', '🕊️', '⭐'],
-  'Ease & Forgiveness':              ['💧', '🌸', '🌿', '✨', '🕊️'],
-  'Pardon & Victory':                ['⚔️', '🛡️', '🕊️', '🌟', '✨'],
-  'Righteous Children':              ['🌱', '🌸', '🌿', '⭐', '💎'],
+  'Forgiveness for All Believers': ['💧', '🌸', '🕊️', '🌿', '✨'],
+  'Trust in Allah': ['🏔️', '⭐', '🌟', '📿', '💎'],
+  'Protection from Fitnah': ['🛡️', '🔒', '🏔️', '⭐', '⚔️'],
+  'Light & Forgiveness': ['✨', '💡', '🌟', '🕊️', '⭐'],
+  'Ease & Forgiveness': ['💧', '🌸', '🌿', '✨', '🕊️'],
+  'Pardon & Victory': ['⚔️', '🛡️', '🕊️', '🌟', '✨'],
+  'Righteous Children': ['🌱', '🌸', '🌿', '⭐', '💎'],
 }
 
 function getTopicEmojis(topics: string[]): string[] {
@@ -102,11 +102,10 @@ function Chips<T extends string | number>({
         <button
           key={String(item.v)}
           onClick={() => onSelect(item.v)}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-            selected === item.v
-              ? 'bg-navy border-navy text-white'
-              : 'border-gray-300 text-gray-600 hover:border-navy'
-          }`}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${selected === item.v
+              ? 'bg-green border-green text-white'
+              : 'border-gray-300 text-gray-600 hover:border-green'
+            }`}
         >
           {item.l}
         </button>
@@ -125,9 +124,8 @@ function ColorDots({ colors, selected, onSelect }: { colors: string[]; selected:
           key={c}
           onClick={() => onSelect(c)}
           style={{ backgroundColor: c }}
-          className={`w-6 h-6 rounded-full border transition-transform ${
-            selected === c ? 'scale-125 ring-2 ring-white ring-offset-1 ring-offset-gray-200' : 'border-gray-200'
-          }`}
+          className={`w-6 h-6 rounded-full border transition-transform ${selected === c ? 'scale-125 ring-2 ring-white ring-offset-1 ring-offset-gray-200' : 'border-gray-200'
+            }`}
         />
       ))}
     </div>
@@ -157,8 +155,8 @@ export default function PrintDesignerPage() {
 
   // ── Emoji drag state (ephemeral — no need to persist) ─────────────────────
   const [isDragging, setIsDragging] = useState(false)
-  const draggingRef   = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
-  const emojiAreaRef  = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
+  const emojiAreaRef = useRef<HTMLDivElement>(null)
 
   function addEmoji(emoji: string) {
     // Compute the new item outside the updater so the updater stays pure.
@@ -199,7 +197,7 @@ export default function PrintDesignerPage() {
     const move = (clientX: number, clientY: number) => {
       if (!draggingRef.current || !emojiAreaRef.current) return
       const rect = emojiAreaRef.current.getBoundingClientRect()
-      const dx = ((clientX - draggingRef.current.startX) / rect.width)  * 100
+      const dx = ((clientX - draggingRef.current.startX) / rect.width) * 100
       const dy = ((clientY - draggingRef.current.startY) / rect.height) * 100
       const nx = Math.max(0, Math.min(92, draggingRef.current.origX + dx))
       const ny = Math.max(0, Math.min(92, draggingRef.current.origY + dy))
@@ -272,7 +270,7 @@ export default function PrintDesignerPage() {
   }
 
   const handleShareImage = async (platform: SharePlatform) => {
-    if (printCollection.length === 0) { alert('Add some duas first.'); return }
+    if (printCollection.length === 0) { setShareError('Add some duas first.'); return }
     setImageLoading(true)
     setShareError(null)
     try {
@@ -309,8 +307,8 @@ export default function PrintDesignerPage() {
     const blockCSS = (() => {
       if (borderStyle === 'none' || blockAccent === 'none') return ''
       const b = `${borderWidth}px ${borderStyle} ${borderColor}`
-      if (blockAccent === 'left-bar')    return `border-left: ${b};`
-      if (blockAccent === 'top-bar')     return `border-top: ${b};`
+      if (blockAccent === 'left-bar') return `border-left: ${b};`
+      if (blockAccent === 'top-bar') return `border-top: ${b};`
       if (blockAccent === 'full-border') return `border: ${b};`
       return ''
     })()
@@ -321,10 +319,10 @@ export default function PrintDesignerPage() {
       const { dua } = item
       const trans = language === 'en' ? dua.translations.en : language === 'ur' ? dua.translations.ur : dua.translations.bn
       const parts: string[] = []
-      if (item.includeReference)       parts.push(`<div class="ref">Surah ${dua.surah}:${dua.ayah} — ${dua.topic}</div>`)
-      if (item.includeArabic)          parts.push(`<div class="arabic" dir="rtl">${dua.arabicText}</div>`)
+      if (item.includeReference) parts.push(`<div class="ref">Surah ${dua.surah}:${dua.ayah} — ${dua.topic}</div>`)
+      if (item.includeArabic) parts.push(`<div class="arabic" dir="rtl">${dua.arabicText}</div>`)
       if (item.includeTransliteration) parts.push(`<div class="translit">${dua.transliteration}</div>`)
-      if (item.includeTranslation)     parts.push(`<div class="trans">${trans}</div>`)
+      if (item.includeTranslation) parts.push(`<div class="trans">${trans}</div>`)
       return `<div class="block">${parts.join('')}</div>`
     }).join('')
 
@@ -342,7 +340,7 @@ ${withFonts ? "@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,
 @page{size:A4 ${orientation};margin:0}
 *{margin:0;padding:0;box-sizing:border-box;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 html,body{height:100%}
-body{font-family:${fontFamily};background:#fff;color:${translationColor};font-size:${fontSize}px;font-weight:${fontWeight};display:flex;align-items:center;justify-content:center;min-height:100%}
+body{font-family:${fontFamily};background:#fff;color:${translationColor};font-size:${fontSize}px;font-weight:${fontWeight};display:flex;align-items:flex-start;justify-content:center;min-height:100%;padding:36px 0}
 .page{width:100%;max-width:${pageMaxWidth}px;padding:36px;position:relative}
 .cover{background:${accent.v};color:${accent.t};padding:36px 24px;border-radius:10px;margin-bottom:32px;text-align:center;${borderStyle !== 'none' ? `border:${borderWidth}px ${borderStyle} ${borderColor};` : ''}}
 .cover h1{font-size:${fontSize + 12}px;font-weight:${fontWeight}}
@@ -357,15 +355,15 @@ body{font-family:${fontFamily};background:#fff;color:${translationColor};font-si
 .footer{text-align:center;color:#aaa;font-size:11px;margin-top:36px;padding-top:16px;border-top:1px solid #eee}
 </style></head><body><div class="page">
 ${withEmojis ? emojiOverlays.map(({ emoji, x, y }) =>
-  `<span style="position:absolute;left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;font-size:36px;line-height:1;pointer-events:none;z-index:5;">${emoji}</span>`
-).join('') : ''}
+      `<span style="position:absolute;left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;font-size:36px;line-height:1;pointer-events:none;z-index:5;">${emoji}</span>`
+    ).join('') : ''}
 ${showBismillah ? `<div class="bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>` : ''}
 ${bodyItems}
 </div></body></html>`
   }
 
   const designDeps = [printCollection, language, showBismillah, fontSize, fontFamily, fontWeight, accent, arabicColor, translitColor, translationColor, borderStyle, borderWidth, borderColor, borderRadius, blockAccent, orientation, blockSpacing, blockBg]
-  const printDeps  = [...designDeps, emojiOverlays]
+  const printDeps = [...designDeps, emojiOverlays]
 
 
   // Preview iframe never includes emojis — the overlay spans in the designer handle them,
@@ -374,36 +372,36 @@ ${bodyItems}
   const previewHtml = useMemo(() => buildHtml(false, false), designDeps)
   // Print / export HTML bakes emojis in at their final positions.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const printHtml   = useMemo(() => buildHtml(true, true),   printDeps)
+  const printHtml = useMemo(() => buildHtml(true, true), printDeps)
 
   // Invalidate cached hosted URL whenever the design changes
   useEffect(() => { hostedUrlRef.current = null }, [printHtml])
 
   const handlePrint = () => {
-    if (printCollection.length === 0) { alert('Add some duas first.'); return }
+    if (printCollection.length === 0) return
     const win = window.open('', '_blank')
     if (win) { win.document.write(printHtml); win.document.close(); setTimeout(() => { win.focus(); win.print() }, 400) }
   }
 
-const searchTerm = sanitizeSearchInput(search);
-const printedIds = new Set(printCollection.map(p => p.dua.id));
+  const searchTerm = sanitizeSearchInput(search);
+  const printedIds = new Set(printCollection.map(p => p.dua.id));
 
-const filteredDuas = duas.filter(d => {
-  if (printedIds.has(d.id)) return false;
+  const filteredDuas = duas.filter(d => {
+    if (printedIds.has(d.id)) return false;
 
-  const { topic, translation, arabic } = sanitizeDuaFields(d);
+    const { topic, translation, arabic } = sanitizeDuaFields(d);
 
-  return (
-    topic.includes(searchTerm) ||
-    translation.includes(searchTerm) ||
-    (search && arabic.includes(search))
-  );
-});
+    return (
+      topic.includes(searchTerm) ||
+      translation.includes(searchTerm) ||
+      (search && arabic.includes(search))
+    );
+  });
 
   // ── Helpers (stable references, not inner components) ─────────────────────
 
   const sectionTitle = (title: string) => (
-    <p className="text-xs font-extrabold text-navy uppercase tracking-wider mb-3">{title}</p>
+    <p className="text-xs font-extrabold text-green uppercase tracking-wider mb-3">{title}</p>
   )
   const subTitle = (title: string) => (
     <p className="text-xs text-gray-400 font-semibold mt-3 mb-1.5">{title}</p>
@@ -417,7 +415,7 @@ const filteredDuas = duas.filter(d => {
         {sectionTitle("Document")}
         <label className="flex items-center justify-between py-2 border-t border-gray-100">
           <span className="text-sm text-gray-700">Bismillah header</span>
-          <input type="checkbox" checked={showBismillah} onChange={e => setDesign({ showBismillah: e.target.checked })} className="accent-navy w-4 h-4" />
+          <input type="checkbox" checked={showBismillah} onChange={e => setDesign({ showBismillah: e.target.checked })} className="accent-green w-4 h-4" />
         </label>
       </div>
 
@@ -503,11 +501,10 @@ const filteredDuas = duas.filter(d => {
                 <button
                   key={emoji}
                   onClick={() => addEmoji(emoji)}
-                  className={`text-2xl w-10 h-10 rounded-xl flex items-center justify-center hover:scale-110 transition-all active:scale-95 ${
-                    isActive
+                  className={`text-2xl w-10 h-10 rounded-xl flex items-center justify-center hover:scale-110 transition-all active:scale-95 ${isActive
                       ? 'bg-gold/20 ring-2 ring-gold'
                       : 'hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   {emoji}
                 </button>
@@ -528,7 +525,7 @@ const filteredDuas = duas.filter(d => {
       {/* Duas list */}
       <div className="bg-white rounded-xl p-3 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-extrabold text-navy uppercase tracking-wider">
+          <p className="text-xs font-extrabold text-green uppercase tracking-wider">
             Duas ({printCollection.length})
           </p>
           <div className="flex gap-2">
@@ -542,7 +539,7 @@ const filteredDuas = duas.filter(d => {
             )}
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="text-xs text-white bg-navy px-3 py-1 rounded-full hover:bg-navy-light"
+              className="text-xs text-white bg-green px-3 py-1 rounded-full hover:bg-green-light"
             >
               + Add
             </button>
@@ -557,7 +554,7 @@ const filteredDuas = duas.filter(d => {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search duas…"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-navy mb-2"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green mb-2"
             />
             {filteredDuas.slice(0, 6).map(dua => (
               <button
@@ -572,7 +569,7 @@ const filteredDuas = duas.filter(d => {
                   🤲
                 </span>
                 <div className="overflow-hidden">
-                  <p className="text-xs font-bold text-navy truncate">{dua.topic}</p>
+                  <p className="text-xs font-bold text-green truncate">{dua.topic}</p>
                   <p className="text-sm text-gray-600 truncate arabic">{dua.arabicText}</p>
                 </div>
               </button>
@@ -594,26 +591,25 @@ const filteredDuas = duas.filter(d => {
                     🤲
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-navy truncate">{item.dua.topic}</p>
+                    <p className="text-xs font-bold text-green truncate">{item.dua.topic}</p>
                     <p className="text-[10px] text-gray-400">Surah {item.dua.surah}:{item.dua.ayah}</p>
                   </div>
                   <button onClick={() => removeFromPrint(item.dua.id)} className="text-red-400 font-bold text-sm hover:text-red-600">✕</button>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {([
-                    { key: 'includeArabic',          label: 'Arabic' },
+                    { key: 'includeArabic', label: 'Arabic' },
                     { key: 'includeTransliteration', label: 'Translit' },
-                    { key: 'includeTranslation',     label: 'Trans' },
-                    { key: 'includeReference',       label: 'Ref' },
+                    { key: 'includeTranslation', label: 'Trans' },
+                    { key: 'includeReference', label: 'Ref' },
                   ] as const).map(({ key, label }) => (
                     <button
                       key={key}
                       onClick={() => updatePrintItem(item.dua.id, { [key]: !item[key] })}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
-                        item[key]
-                          ? 'bg-navy border-navy text-white'
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${item[key]
+                          ? 'bg-green border-green text-white'
                           : 'border-gray-300 text-gray-500'
-                      }`}
+                        }`}
                     >
                       {label}
                     </button>
@@ -631,8 +627,8 @@ const filteredDuas = duas.filter(d => {
 
   const previewJsx = (
     <div className="flex flex-col h-full bg-[#2c2c3e]">
-      <div className="flex items-center justify-between px-4 py-2 bg-navy-dark">
-        <p className="text-navy-muted text-xs font-bold uppercase tracking-wider">Live Preview</p>
+      <div className="flex items-center justify-between px-4 py-2 bg-green-dark">
+        <p className="text-green-muted text-xs font-bold uppercase tracking-wider">Live Preview</p>
         <div className="flex items-center gap-3">
           {emojiOverlays.length > 0 && (
             <span className="text-[#5d8aa8] text-xs">{emojiOverlays.length} emoji{emojiOverlays.length !== 1 ? 's' : ''}</span>
@@ -682,7 +678,7 @@ const filteredDuas = duas.filter(d => {
   return (
     <div className="h-screen flex flex-col bg-surface">
       {/* Header */}
-      <header className="bg-navy flex items-center px-4 py-3 shrink-0">
+      <header className="bg-green flex items-center px-4 py-3 shrink-0">
         <HomeButton />
         <h1 className="flex-1 text-white font-bold text-lg text-center">Print Designer</h1>
         <button
@@ -694,14 +690,13 @@ const filteredDuas = duas.filter(d => {
       </header>
 
       {/* Mobile tab bar */}
-      <div className="flex lg:hidden bg-navy shrink-0">
+      <div className="flex lg:hidden bg-green shrink-0">
         {(['preview', 'design'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-              tab === t ? 'border-gold text-white' : 'border-transparent text-navy-muted'
-            }`}
+            className={`flex-1 py-2.5 text-sm font-semibold border-b-2 transition-colors ${tab === t ? 'border-gold text-white' : 'border-transparent text-green-muted'
+              }`}
           >
             {t === 'preview' ? '👁 Preview' : '✏️ Design'}
           </button>
@@ -732,33 +727,53 @@ const filteredDuas = duas.filter(d => {
       )}
 
       {/* Action bar */}
-      <div className="flex gap-2 px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] bg-white border-t border-gray-200 shadow-lg shrink-0 mb-4">
+      <div className="fixed right-3 md:right-4 bottom-16 md:-translate-y-1/2 flex md:flex-col flex-row items-center gap-2 bg-white border border-gray-200 shadow-md rounded-full px-2 py-2 z-50">
+
+        {/* Print */}
         <button
           onClick={handlePrint}
-          className="flex-1 py-3 rounded-xl border-2 border-navy text-navy font-bold text-sm hover:bg-navy hover:text-white transition-colors"
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+          title="Print"
         >
-          🖨 Print
+          🖨
         </button>
+
+        {/* PDF */}
         <button
           onClick={() => {
-            if (printCollection.length === 0) { alert('Add some duas first.'); return }
-            const win = window.open('', '_blank')
-            if (win) { win.document.write(printHtml); win.document.close(); setTimeout(() => { win.focus(); win.print() }, 500) }
+            if (printCollection.length === 0) return;
+            const win = window.open('', '_blank');
+            if (win) {
+              win.document.write(printHtml);
+              win.document.close();
+              setTimeout(() => {
+                win.focus();
+                win.print();
+              }, 500);
+            }
           }}
-          className="flex-1 py-3 rounded-xl border-2 border-navy text-navy font-bold text-sm hover:bg-navy hover:text-white transition-colors"
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+          title="PDF"
         >
-          ⬇ PDF
+          ⬇
         </button>
+
+        {/* Share */}
         <button
-          onClick={() => { setShowSharePanel(p => !p); setShareError(null) }}
-          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-colors ${showSharePanel ? 'bg-navy text-white' : 'bg-gold hover:bg-gold-dark text-white'}`}
+          onClick={() => {
+            setShowSharePanel(p => !p);
+            setShareError(null);
+          }}
+          className={`w-10 h-10 flex items-center justify-center rounded-full transition ${showSharePanel ? 'bg-green text-white' : 'hover:bg-gray-100'
+            }`}
+          title="Share"
         >
-          <svg className="inline-block w-4 h-4 mr-1.5 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="inline-block w-4 h-4 mr-1.5 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="22" y1="2" x2="11" y2="13" />
             <polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
-          Share
         </button>
+
       </div>
     </div>
   )
