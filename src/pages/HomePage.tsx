@@ -39,25 +39,11 @@ export default function HomePage() {
     userPicture,
     signOut,
     fetchAndSetUserName,
-    refreshBookmarks,
   } = useApp()
 
-  // Sync bookmarks on mount and whenever the user returns to the tab
   useEffect(() => {
-    if (userToken) {
-      if (!userName) fetchAndSetUserName()
-      refreshBookmarks()
-    }
+    if (userToken && !userName) fetchAndSetUserName()
   }, [userToken]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const onFocus = () => {
-      const { userToken: t, refreshBookmarks: refresh } = useApp.getState()
-      if (t) refresh()
-    }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [])
 
   const { duas, isLoading, error, retry } = useQuranContent()
 

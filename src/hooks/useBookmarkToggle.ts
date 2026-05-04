@@ -30,8 +30,8 @@ export function useBookmarkToggle(
         if (bmId && bmId !== 'local') {
           await removeBookmark(userToken, bmId)
             .catch(() => {
-              // API failed — roll back
               updateBookmarkMap(curr => ({ ...curr, [key]: bmId }))
+              toast('Could not remove bookmark — please try again')
             })
         }
       } else {

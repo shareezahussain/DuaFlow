@@ -73,6 +73,9 @@ export const DEFAULT_DESIGN: DesignSettings = {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
+let _bookmarkLastFetch = 0
+const BOOKMARK_COOLDOWN_MS = 30_000
+
 interface AppStore {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -260,6 +263,9 @@ export const useApp = create<AppStore>()(
       refreshBookmarks: async () => {
         const { userToken, refreshToken } = get()
         if (!userToken) return
+
+        if (Date.now() - _bookmarkLastFetch < BOOKMARK_COOLDOWN_MS) return
+
         try {
           const refreshFn = refreshToken
             ? async () => {
@@ -275,6 +281,7 @@ export const useApp = create<AppStore>()(
             RABBANA_META.filter(m => m.surah === b.key && m.ayah === b.verseNumber)
               .forEach(m => { map[String(m.id)] = b.id })
           })
+          _bookmarkLastFetch = Date.now()
           set({ bookmarkMap: map })
         } catch { /* non-fatal — keep existing map */ }
       },
