@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Dua, RABBANA_META } from "../data/rabbanas";
-import { startLogin as pkceStartLogin, fetchBookmarks, fetchUserProfile, decodeJwtPayload } from "../services/bookmarksApi";
+import { startLogin as pkceStartLogin, fetchBookmarks, fetchUserProfile, decodeJwtPayload, refreshAccessToken } from "../services/bookmarksApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -106,7 +106,9 @@ interface AppStore {
   // Bookmarks — duaId -> QF bookmark ID
   bookmarkMap: Record<string, string>;
   setBookmarkMap: (map: Record<string, string>) => void;
+  updateBookmarkMap: (updater: (current: Record<string, string>) => Record<string, string>) => void;
   isBookmarked: (duaId: number) => boolean;
+  refreshBookmarks: () => Promise<void>;
 }
 
 export const useApp = create<AppStore>()(
@@ -252,14 +254,36 @@ export const useApp = create<AppStore>()(
       // Bookmarks
       bookmarkMap: {},
       setBookmarkMap: (map) => set({ bookmarkMap: map }),
-      isBookmarked: (duaId) =>
-        String(duaId) in get().bookmarkMap,
+      updateBookmarkMap: (updater) =>
+        set(state => ({ bookmarkMap: updater(state.bookmarkMap) })),
+      isBookmarked: (duaId) => String(duaId) in get().bookmarkMap,
+      refreshBookmarks: async () => {
+        const { userToken, refreshToken } = get()
+        if (!userToken) return
+        try {
+          const refreshFn = refreshToken
+            ? async () => {
+                const newToken = await refreshAccessToken(refreshToken)
+                set({ userToken: newToken })
+                return newToken
+              }
+            : undefined
+          const bookmarks = await fetchBookmarks(userToken, refreshFn)
+          const map: Record<string, string> = {}
+          bookmarks.forEach(b => {
+            if (!b.key || !b.verseNumber || !b.id) return
+            RABBANA_META.filter(m => m.surah === b.key && m.ayah === b.verseNumber)
+              .forEach(m => { map[String(m.id)] = b.id })
+          })
+          set({ bookmarkMap: map })
+        } catch { /* non-fatal — keep existing map */ }
+      },
     }),
     {
       name: "duaflow-store",
       // Never persist refreshToken — keep it in memory only (spec requirement)
       partialize: (state) => {
-        const { refreshToken: _rt, ...rest } = state;
+        const { refreshToken: _rt, bookmarkMap: _bm, ...rest } = state;
         return rest;
       },
     }

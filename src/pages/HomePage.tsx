@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
-import type { Dua } from '../data/rabbanas'
+import type { Dua, DuaCategory } from '../data/rabbanas'
 import Footer from '../components/Footer'
 import SignInModal from '../components/SignInModal'
 import BookmarksPanel from '../components/BookmarksPanel'
@@ -11,9 +11,22 @@ import DuaPreviewModal from '../components/DuaPreviewModal'
 import DuaCard from '../components/DuaCard'
 import { sanitizeSearchInput, sanitizeDuaFields } from '../util/searchUtils'
 
-const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
+import { LANG_LABELS } from '../util/constants'
 
 const PAGE_SIZE = 9
+
+const FILTERS: Array<{
+  key:   DuaCategory
+  label: string
+  idle:  string  // unselected classes
+  active: string // selected classes
+}> = [
+  { key: 'peace',      label: '🕊️ Peace',       idle: 'border-sky-300 text-sky-700 bg-sky-50',         active: 'bg-sky-500 border-sky-500 text-white' },
+  { key: 'forgiveness',label: '🌿 Forgiveness',  idle: 'border-emerald-300 text-emerald-700 bg-emerald-50', active: 'bg-emerald-600 border-emerald-600 text-white' },
+  { key: 'healing',    label: '💜 Healing',      idle: 'border-violet-300 text-violet-700 bg-violet-50', active: 'bg-violet-600 border-violet-600 text-white' },
+  { key: 'provision',  label: '✨ Provision',    idle: 'border-amber-300 text-amber-700 bg-amber-50',    active: 'bg-amber-500 border-amber-500 text-white' },
+  { key: 'repentance', label: '🤲 Repentance',   idle: 'border-rose-300 text-rose-700 bg-rose-50',      active: 'bg-rose-600 border-rose-600 text-white' },
+]
 
 export default function HomePage() {
   const {
@@ -26,16 +39,32 @@ export default function HomePage() {
     userPicture,
     signOut,
     fetchAndSetUserName,
+    refreshBookmarks,
   } = useApp()
 
+  // Sync bookmarks on mount and whenever the user returns to the tab
   useEffect(() => {
-    if (userToken && !userName) fetchAndSetUserName()
+    if (userToken) {
+      if (!userName) fetchAndSetUserName()
+      refreshBookmarks()
+    }
   }, [userToken]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const onFocus = () => {
+      const { userToken: t, refreshBookmarks: refresh } = useApp.getState()
+      if (t) refresh()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   const { duas, isLoading, error, retry } = useQuranContent()
 
-  const [search,        setSearch]        = useState('')
-  const [page,          setPage]          = useState(1)
+  const [search,           setSearch]           = useState('')
+  const [activeFilters,    setActiveFilters]    = useState<Set<DuaCategory>>(new Set())
+  const [showFilters,      setShowFilters]      = useState(false)
+  const [page,             setPage]             = useState(1)
   const [showSignIn,    setShowSignIn]    = useState(false)
   const [showBookmarks, setShowBookmarks] = useState(false)
   const [showPrintCart, setShowPrintCart] = useState(false)
@@ -44,19 +73,24 @@ export default function HomePage() {
 
   const bookmarkCount = Object.keys(bookmarkMap).length
 
+  const toggleFilter = useCallback((key: DuaCategory) => {
+    setActiveFilters(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+    setPage(1)
+  }, [])
+
   const filtered = useMemo(() => {
     const term = sanitizeSearchInput(search)
-    if (!term) return duas
     return duas.filter((d: Dua) => {
+      if (activeFilters.size > 0 && !(d.categories ?? []).some(c => activeFilters.has(c))) return false
+      if (!term) return true
       const { topic, translation, transliteration, arabic } = sanitizeDuaFields(d)
-      return (
-        arabic.includes(term) ||
-        transliteration.includes(term) ||
-        translation.includes(term) ||
-        topic.includes(term)
-      )
+      return arabic.includes(term) || transliteration.includes(term) || translation.includes(term) || topic.includes(term)
     })
-  }, [duas, search])
+  }, [duas, search, activeFilters])
 
   const totalPages = useMemo(() => Math.ceil(filtered.length / PAGE_SIZE), [filtered.length])
 
@@ -172,23 +206,78 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-4">
-        {/* Search */}
-        <div className="relative mb-5">
-          <input
-            type="text"
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Search by topic, dua, or translation…"
-            className="w-full bg-white rounded-xl px-4 py-3 pr-10 shadow-sm text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green"
-          />
-          {search && (
+        {/* Search bar + filter button */}
+        <div className="flex gap-2 mb-5">
+          {/* Search — takes remaining width */}
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Search by topic, dua, or translation…"
+              className="w-full bg-white rounded-xl px-4 py-3 pr-10 shadow-sm text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green"
+            />
+            {search && (
+              <button
+                onClick={() => { setSearch(''); setPage(1) }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Filter button + dropdown */}
+          <div className="relative shrink-0">
             <button
-              onClick={() => { setSearch(''); setPage(1) }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              onClick={() => setShowFilters(v => !v)}
+              className={`h-full px-4 rounded-xl shadow-sm border text-sm font-semibold flex items-center gap-1.5 transition-colors ${
+                activeFilters.size > 0
+                  ? 'bg-green border-green text-white'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-green'
+              }`}
             >
-              ✕
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 8h10M11 12h2" />
+              </svg>
+              Filter
+              {activeFilters.size > 0 && (
+                <span className="w-4 h-4 rounded-full bg-white/30 text-[10px] font-bold flex items-center justify-center">
+                  {activeFilters.size}
+                </span>
+              )}
             </button>
-          )}
+
+            {showFilters && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowFilters(false)} />
+                <div className="absolute right-0 top-full mt-2 z-20 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-64">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Filter by theme</p>
+                  <div className="flex flex-wrap gap-2">
+                    {FILTERS.map(({ key, label, idle, active }) => (
+                      <button
+                        key={key}
+                        onClick={() => toggleFilter(key)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          activeFilters.has(key) ? active : idle
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {activeFilters.size > 0 && (
+                    <button
+                      onClick={() => { setActiveFilters(new Set()); setPage(1) }}
+                      className="mt-3 w-full text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Skeleton cards — shown only on first load (no cache) */}

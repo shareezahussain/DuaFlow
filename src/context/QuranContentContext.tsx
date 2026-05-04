@@ -16,7 +16,7 @@ const QuranContentContext = createContext<QuranContentContextType>({
   retry: () => {},
 });
 
-const CACHE_KEY = 'duaflow-content-v1';
+const CACHE_KEY = 'duaflow-content-v2';
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 function readCache(): Dua[] | null {

@@ -469,11 +469,11 @@ ${bodyItems}
         {sectionTitle("Border & Frame")}
         {subTitle("Block accent")}
         <Chips items={BLOCK_ACCENTS} selected={blockAccent} onSelect={v => setDesign({ blockAccent: v as string })} />
-        {subTitle("Style")}
+        {subTitle("Border Style")}
         <Chips items={BORDER_STYLES} selected={borderStyle} onSelect={v => setDesign({ borderStyle: v as string })} />
-        {subTitle("Width")}
+        {subTitle("Border width")}
         <Chips items={BORDER_WIDTHS.map(b => ({ l: b.l, v: b.v }))} selected={borderWidth} onSelect={v => setDesign({ borderWidth: v as number })} />
-        {subTitle("Corner radius")}
+        {subTitle("Border Corner Radius")}
         <Chips items={BORDER_RADII.map(b => ({ l: b.l, v: b.v }))} selected={borderRadius} onSelect={v => setDesign({ borderRadius: v as number })} />
         {subTitle("Border colour")}
         <ColorDots colors={ACCENT_COLORS.map(a => a.v)} selected={borderColor} onSelect={v => setDesign({ borderColor: v })} />
@@ -626,25 +626,25 @@ ${bodyItems}
   )
 
   const previewJsx = (
-    <div className="flex flex-col h-full bg-[#2c2c3e]">
-      <div className="flex items-center justify-between px-4 py-2 bg-green-dark">
-        <p className="text-green-muted text-xs font-bold uppercase tracking-wider">Live Preview</p>
+    <div className="flex flex-col h-full bg-surface">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-white">
+        <p className="text-green text-xs font-bold uppercase tracking-wider">Live Preview</p>
         <div className="flex items-center gap-3">
           {emojiOverlays.length > 0 && (
-            <span className="text-[#5d8aa8] text-xs">{emojiOverlays.length} emoji{emojiOverlays.length !== 1 ? 's' : ''}</span>
+            <span className="text-gray-400 text-xs">{emojiOverlays.length} emoji{emojiOverlays.length !== 1 ? 's' : ''}</span>
           )}
         </div>
       </div>
-      <div className="flex-1 p-4 overflow-auto">
+      <div className="flex-1 overflow-hidden">
         <div
           ref={emojiAreaRef}
-          className={`relative bg-white rounded shadow-2xl mx-auto overflow-hidden ${orientation === 'landscape' ? 'w-full max-w-4xl' : 'w-full max-w-2xl'}`}
+          className="relative bg-white h-full w-full overflow-hidden"
         >
           <iframe
             srcDoc={previewHtml}
             title="Print Preview"
-            className="w-full border-none"
-            style={{ height: orientation === 'landscape' ? '600px' : '800px', pointerEvents: isDragging ? 'none' : 'auto' }}
+            className="w-full h-full border-none"
+            style={{ pointerEvents: isDragging ? 'none' : 'auto' }}
           />
           {/* Draggable emoji overlay */}
           {emojiOverlays.map(item => (
@@ -727,7 +727,7 @@ ${bodyItems}
       )}
 
       {/* Action bar */}
-      <div className="fixed right-3 md:right-4 bottom-16 md:-translate-y-1/2 flex md:flex-col flex-row items-center gap-2 bg-white border border-gray-200 shadow-md rounded-full px-2 py-2 z-50">
+      <div className="fixed right-3 md:right-4 bottom-[12rem] md:-translate-y-1/2 flex flex-col items-center gap-2 bg-white border border-gray-200 shadow-md rounded-full px-2 py-2 z-50">
 
         {/* Print */}
         <button
@@ -764,11 +764,10 @@ ${bodyItems}
             setShowSharePanel(p => !p);
             setShareError(null);
           }}
-          className={`w-10 h-10 flex items-center justify-center rounded-full transition ${showSharePanel ? 'bg-green text-white' : 'hover:bg-gray-100'
-            }`}
+          className={`w-10 h-10 flex items-center justify-center rounded-full transition ${showSharePanel ? 'bg-green text-white' : 'hover:bg-gray-100'}`}
           title="Share"
         >
-            <svg className="inline-block w-4 h-4 mr-1.5 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="22" y1="2" x2="11" y2="13" />
             <polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
