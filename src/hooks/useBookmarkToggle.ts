@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { addBookmark, removeBookmark } from '../services/bookmarksApi'
 import { toast } from '../util/toast'
@@ -11,20 +11,29 @@ export function useBookmarkToggle(
   const [isLoading, setIsLoading] = useState(false)
   const [showSparkle, setShowSparkle] = useState(false)
 
+  const mountedRef   = useRef(true)
+  const sparkleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (sparkleTimer.current) clearTimeout(sparkleTimer.current)
+    }
+  }, [])
+
   const isBookmarkedNow = isBookmarked(dua.id)
   const key = String(dua.id)
 
   const toggle = useCallback(async () => {
     if (!userToken) { onSignIn(); return }
     if (isLoading) return
-    setIsLoading(true)
+    if (mountedRef.current) setIsLoading(true)
 
     try {
-      // Read fresh state inside the async callback — avoids stale closure issues
       const bmId = useApp.getState().bookmarkMap[key]
 
       if (isBookmarkedNow) {
-        // Optimistic remove — update UI instantly
         updateBookmarkMap(curr => { const { [key]: _, ...rest } = curr; return rest })
 
         if (bmId && bmId !== 'local') {
@@ -35,21 +44,23 @@ export function useBookmarkToggle(
             })
         }
       } else {
-        // Optimistic add — mark locally so UI responds instantly
         updateBookmarkMap(curr => ({ ...curr, [key]: 'local' }))
         try {
           const created = await addBookmark(userToken, dua.surah, dua.ayah)
-          // Replace 'local' placeholder with real server ID
           updateBookmarkMap(curr => ({ ...curr, [key]: created.id ?? 'local' }))
-        } catch {
-          // API unavailable — keep 'local' so the dua remains bookmarked offline
-        }
+        } catch { /* keep 'local' */ }
+
         toast('Dua saved to bookmarks ✓')
-        setShowSparkle(true)
-        setTimeout(() => setShowSparkle(false), 700)
+        if (mountedRef.current) {
+          setShowSparkle(true)
+          if (sparkleTimer.current) clearTimeout(sparkleTimer.current)
+          sparkleTimer.current = setTimeout(() => {
+            if (mountedRef.current) setShowSparkle(false)
+          }, 700)
+        }
       }
     } finally {
-      setIsLoading(false)
+      if (mountedRef.current) setIsLoading(false)
     }
   }, [userToken, isLoading, isBookmarkedNow, key, dua.surah, dua.ayah, onSignIn, updateBookmarkMap])
 
