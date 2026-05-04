@@ -116,6 +116,7 @@ export default function HomePage() {
           <div className="flex items-center gap-2 max-[420px]:flex-row-reverse">
             <button
               onClick={() => setShowPrintCart(true)}
+              aria-label={`Print collection, ${printCollection.length} item${printCollection.length !== 1 ? 's' : ''}`}
               className="bg-white hover:bg-gray-100 text-gold-dark font-bold text-xs w-[60px] h-[34px] rounded-full transition-colors flex items-center justify-center gap-1"
             >
               🖨 {printCollection.length}
@@ -125,6 +126,7 @@ export default function HomePage() {
               <>
                 <button
                   onClick={() => setShowBookmarks(true)}
+                  aria-label={`Saved duas, ${bookmarkCount} saved`}
                   className="bg-white hover:bg-gray-100 text-gold-dark font-bold text-xs w-[60px] h-[34px] rounded-full transition-colors flex items-center justify-center gap-1"
                 >
                   🔖 {bookmarkCount}

@@ -586,6 +586,7 @@ export default function DuaDetailPage() {
             <select
               value={speed}
               onChange={e => changeSpeed(Number(e.target.value))}
+              aria-label="Playback speed"
               className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-green"
             >
               {SPEEDS.map(s => (
@@ -594,6 +595,8 @@ export default function DuaDetailPage() {
             </select>
             <button
               onClick={toggleRepeat}
+              aria-label={repeat ? 'Repeat on — click to turn off' : 'Repeat off — click to turn on'}
+              aria-pressed={repeat}
               className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
                 repeat ? 'bg-green border-green text-white' : 'border-gray-200 text-gray-500 hover:border-green'
               }`}

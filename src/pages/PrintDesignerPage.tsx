@@ -32,6 +32,21 @@ const ORIENTATION_OPTIONS = [{ l: '📄 Portrait', v: 'portrait' }, { l: '🖼 L
 const SPACING_OPTIONS = [{ l: 'Compact', v: 'compact' }, { l: 'Normal', v: 'normal' }, { l: 'Spacious', v: 'spacious' }]
 const BLOCK_BG_COLORS = ['#ffffff', '#fafafa', '#f5f5f5', '#eef2f7', '#fdf6ec', '#fffde7']
 
+const COLOR_NAMES: Record<string, string> = {
+  '#111111': 'Near Black',
+  '#1a2749': 'Dark Navy',
+  '#145a32': 'Dark Green',
+  '#4a235a': 'Dark Purple',
+  '#555555': 'Gray',
+  '#7b241c': 'Dark Red',
+  '#ffffff': 'White',
+  '#fafafa': 'Off White',
+  '#f5f5f5': 'Light Gray',
+  '#eef2f7': 'Cool Gray',
+  '#fdf6ec': 'Cream',
+  '#fffde7': 'Soft Yellow',
+}
+
 // ── Topic-based emoji suggestions (objects only, no faces) ────────────────────
 
 const TOPIC_EMOJIS: Record<string, string[]> = {
@@ -118,16 +133,23 @@ function Chips<T extends string | number>({
 
 function ColorDots({ colors, selected, onSelect }: { colors: string[]; selected: string; onSelect: (c: string) => void }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {colors.map(c => (
-        <button
-          key={c}
-          onClick={() => onSelect(c)}
-          style={{ backgroundColor: c }}
-          className={`w-6 h-6 rounded-full border transition-transform ${selected === c ? 'scale-125 ring-2 ring-white ring-offset-1 ring-offset-gray-200' : 'border-gray-200'
-            }`}
-        />
-      ))}
+    <div className="flex flex-wrap gap-2" role="radiogroup">
+      {colors.map(c => {
+        const name = COLOR_NAMES[c] ?? c
+        const isSelected = selected === c
+        return (
+          <button
+            key={c}
+            onClick={() => onSelect(c)}
+            role="radio"
+            aria-checked={isSelected}
+            aria-label={isSelected ? `${name} (selected)` : name}
+            title={name}
+            style={{ backgroundColor: c }}
+            className={`w-6 h-6 rounded-full border transition-transform ${isSelected ? 'scale-125 ring-2 ring-white ring-offset-1 ring-offset-gray-200' : 'border-gray-200 hover:scale-110'}`}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -732,6 +754,7 @@ ${bodyItems}
         {/* Print */}
         <button
           onClick={handlePrint}
+          aria-label="Print"
           className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
           title="Print"
         >
@@ -752,6 +775,7 @@ ${bodyItems}
               }, 500);
             }
           }}
+          aria-label="Save as PDF"
           className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
           title="PDF"
         >
@@ -764,6 +788,8 @@ ${bodyItems}
             setShowSharePanel(p => !p);
             setShareError(null);
           }}
+          aria-label="Share design"
+          aria-expanded={showSharePanel}
           className={`w-10 h-10 flex items-center justify-center rounded-full transition ${showSharePanel ? 'bg-green text-white' : 'hover:bg-gray-100'}`}
           title="Share"
         >

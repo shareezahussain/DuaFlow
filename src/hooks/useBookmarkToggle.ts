@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useApp } from '../context/AppContext'
 import { addBookmark, removeBookmark } from '../services/bookmarksApi'
+import { toast } from '../util/toast'
 
 export function useBookmarkToggle(
   dua: { id: number; surah: number; ayah: number },
@@ -43,6 +44,7 @@ export function useBookmarkToggle(
         } catch {
           // API unavailable — keep 'local' so the dua remains bookmarked offline
         }
+        toast('Dua saved to bookmarks ✓')
         setShowSparkle(true)
         setTimeout(() => setShowSparkle(false), 700)
       }

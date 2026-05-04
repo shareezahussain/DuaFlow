@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import type { Dua } from '../data/rabbanas'
 import { useApp } from '../context/AppContext'
 import { useBookmarkToggle } from '../hooks/useBookmarkToggle'
 import { LANG_LABELS, type Lang } from '../util/constants'
+
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
 
 interface Props {
   dua: Dua
@@ -16,20 +18,51 @@ export default function DuaPreviewModal({ dua, onClose, onSignIn }: Props) {
   const [lang, setLang] = useState<Lang>(language)
   const inPrint = isInPrint(dua.id)
   const { isBookmarked: bm, isLoading: bmLoading, showSparkle, toggle: toggleBookmark } = useBookmarkToggle(dua, onSignIn)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const titleId = `dua-modal-${dua.id}`
+
+  // Focus first element on open; restore focus on close
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null
+    const first = dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE)[0]
+    first?.focus()
+    return () => prev?.focus()
+  }, [])
+
+  // Trap focus + Escape to close
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab') return
+      const els = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])
+      if (!els.length) return
+      const first = els[0], last = els[els.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4"
       onClick={onClose}
+      aria-hidden="true"
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
         onClick={e => e.stopPropagation()}
+        aria-hidden="false"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-green text-base truncate">{dua.topic}</p>
+            <p id={titleId} className="font-bold text-green text-base truncate">{dua.topic}</p>
             <p className="text-xs text-gray-400 mt-0.5">Surah {dua.surah}:{dua.ayah}</p>
           </div>
           <div className="flex items-center gap-2 ml-3">
@@ -58,7 +91,7 @@ export default function DuaPreviewModal({ dua, onClose, onSignIn }: Props) {
                 <span className="text-xs font-medium">{bm ? 'Saved' : 'Save'}</span>
               </button>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            <button onClick={onClose} aria-label="Close" className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">✕</button>
           </div>
         </div>
 

@@ -5,6 +5,7 @@ import RootPage from './src/pages/RootPage'
 import DuaDetailPage from './src/pages/DuaDetailPage'
 import PrintDesignerPage from './src/pages/PrintDesignerPage'
 import AuthCallbackPage from './src/pages/AuthCallbackPage'
+import Toast from './src/components/Toast'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
             <Route path="/print" element={<PrintDesignerPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
           </Routes>
+          <Toast />
         </BrowserRouter>
       </QuranContentProvider>
     </AppProvider>
