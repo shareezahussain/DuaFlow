@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
-import { addBookmark, removeBookmark } from '../services/bookmarksApi'
+import { addBookmark, removeBookmark, refreshAccessToken } from '../services/bookmarksApi'
 import { toast } from '../util/toast'
 
 export function useBookmarkToggle(
@@ -31,13 +31,26 @@ export function useBookmarkToggle(
     if (mountedRef.current) setIsLoading(true)
 
     try {
-      const bmId = useApp.getState().bookmarkMap[key]
+      // Read fresh state to avoid stale closures
+      const { bookmarkMap, refreshToken, setUserToken } = useApp.getState()
+      const bmId = bookmarkMap[key]
+
+      // Build a refresh function so expired tokens are retried automatically.
+      // refreshToken is in-memory only (not persisted) — available for the
+      // lifetime of the session without a page reload.
+      const refreshFn = refreshToken
+        ? async () => {
+            const newToken = await refreshAccessToken(refreshToken)
+            setUserToken(newToken)
+            return newToken
+          }
+        : undefined
 
       if (isBookmarkedNow) {
         updateBookmarkMap(curr => { const { [key]: _, ...rest } = curr; return rest })
 
         if (bmId && bmId !== 'local') {
-          await removeBookmark(userToken, bmId)
+          await removeBookmark(userToken, bmId, refreshFn)
             .catch(() => {
               updateBookmarkMap(curr => ({ ...curr, [key]: bmId }))
               toast('Could not remove bookmark — please try again')
@@ -46,7 +59,7 @@ export function useBookmarkToggle(
       } else {
         updateBookmarkMap(curr => ({ ...curr, [key]: 'local' }))
         try {
-          const created = await addBookmark(userToken, dua.surah, dua.ayah)
+          const created = await addBookmark(userToken, dua.surah, dua.ayah, refreshFn)
           updateBookmarkMap(curr => ({ ...curr, [key]: created.id ?? 'local' }))
         } catch { /* keep 'local' */ }
 
