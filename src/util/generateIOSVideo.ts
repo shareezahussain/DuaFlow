@@ -3,6 +3,7 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util'
 import { toErrorMessage } from './errorMessage'
 
 let ffmpegInstance: FFmpeg | null = null
+let progressHandler: ((event: { progress: number; time: number }) => void) | null = null
 
 async function getFFmpeg(onProgress: (stage: string) => void): Promise<FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance
@@ -58,11 +59,11 @@ export async function generateIOSVideo(
   await ffmpeg.writeFile('card.png', frameData)
   await ffmpeg.writeFile('audio.mp3', audioData)
 
-  // Remove any stale progress listener before adding a fresh one
-  ffmpeg.off('progress', () => {})
-  ffmpeg.on('progress', ({ progress }) => {
+  if (progressHandler) ffmpeg.off('progress', progressHandler)
+  progressHandler = ({ progress }) => {
     if (progress > 0) onProgress(`Generating video… ${Math.round(progress * 100)}%`)
-  })
+  }
+  ffmpeg.on('progress', progressHandler)
 
   onProgress('Generating video…')
   let exitCode: number

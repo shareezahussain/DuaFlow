@@ -27,7 +27,7 @@ export default function PrintCartPanel({ onClose }: Props) {
         items.length > 0 ? (
           <button
             onClick={goToDesigner}
-            className="w-full py-2.5 bg-navy hover:bg-navy-light text-white font-bold text-sm rounded-xl transition-colors"
+            className="w-full py-2.5 bg-green hover:bg-green-light text-white font-bold text-sm rounded-xl transition-colors"
           >
             🖨 Design &amp; Print ({items.length})
           </button>

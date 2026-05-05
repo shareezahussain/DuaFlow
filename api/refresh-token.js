@@ -1,52 +1,32 @@
 /**
  * Vercel serverless function — refreshes an access token server-side.
- * Confidential client: client_secret stays on the server, never sent to browser.
+ * POST /api/refresh-token
  */
 import { getQfOAuthConfig } from './config/qfOAuthConfig.js'
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  let clientId, clientSecret, authBaseUrl
-  try {
-    ;({ clientId, clientSecret, authBaseUrl } = getQfOAuthConfig())
-  } catch (e) {
-    return res.status(500).json({ error: e.message })
-  }
+  const { clientId, clientSecret, authBaseUrl } = getQfOAuthConfig()
 
-  if (!clientSecret) {
-    return res.status(500).json({ error: 'Client secret is required for confidential client token refresh' })
-  }
+  if (!clientSecret) return res.status(500).json({ error: 'Client secret not configured' })
 
   const { refresh_token } = req.body ?? {}
-  if (!refresh_token) {
-    return res.status(400).json({ error: 'Missing required field: refresh_token' })
-  }
+  if (!refresh_token) return res.status(400).json({ error: 'Missing required field: refresh_token' })
 
-  const body = new URLSearchParams({
-    grant_type:    'refresh_token',
-    refresh_token,
-  }).toString()
+  const upstream = await fetch(`${authBaseUrl}/oauth2/token`, {
+    method:  'POST',
+    headers: {
+      Authorization:  `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body:   new URLSearchParams({ grant_type: 'refresh_token', refresh_token }).toString(),
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => null)
 
-  try {
-    const response = await fetch(`${authBaseUrl}/oauth2/token`, {
-      method: 'POST',
-      headers: {
-        Authorization:  `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body,
-    })
+  if (!upstream) return res.status(502).json({ error: 'Upstream request failed' })
+  if (!upstream.ok) return res.status(upstream.status).json({ error: 'Failed to refresh access token' })
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'Failed to refresh access token' })
-    }
-
-    const data = await response.json()
-    return res.status(200).json(data)
-  } catch {
-    return res.status(500).json({ error: 'Failed to refresh access token' })
-  }
+  const data = await upstream.json().catch(() => null)
+  return res.status(200).json(data)
 }

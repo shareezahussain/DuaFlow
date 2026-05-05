@@ -32,7 +32,7 @@ export default function SignInModal({ onClose }: Props) {
         className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-navy font-bold text-lg mb-2">Sign in to bookmark duas</h2>
+        <h2 className="text-green font-bold text-lg mb-2">Sign in to bookmark duas</h2>
         <p className="text-gray-500 text-xs mb-5">
           Bookmarks sync to your Quran Foundation account. A sign-in window will open — complete it to continue.
         </p>
@@ -40,7 +40,7 @@ export default function SignInModal({ onClose }: Props) {
         <button
           onClick={handleSignIn}
           disabled={loading}
-          className="w-full py-3 bg-navy hover:bg-navy-light text-white font-bold rounded-xl text-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+          className="w-full py-3 bg-green hover:bg-green-light text-white font-bold rounded-xl text-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
         >
           {loading
             ? <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Waiting for sign-in…</>

@@ -6,6 +6,10 @@
 
 type Ctx = CanvasRenderingContext2D
 
+const SCALE_MIN       = 0.6
+const SCALE_STEP      = 0.05
+const FIT_THRESHOLD   = 0.92
+
 const GREEN    = '#1d4c4e'
 const BLACK    = '#0d0d0d'
 const GRAY     = '#4a5568'
@@ -79,9 +83,9 @@ export function renderKaraokeFrame(
     gapTTr   = Math.max(Math.round(18 * s * cs), 10)
     totalH   = aBlockH + gapAT + tBlockH + gapTTr + trBlockH
 
-    if (totalH <= availableH * 0.92) break
-    cs -= 0.05
-  } while (cs >= 0.6)
+    if (totalH <= availableH * FIT_THRESHOLD) break
+    cs -= SCALE_STEP
+  } while (cs >= SCALE_MIN)
 
   const aStartY = headerH + Math.round(Math.max(aFontSize! * 1.5, (availableH - totalH!) / 2))
 

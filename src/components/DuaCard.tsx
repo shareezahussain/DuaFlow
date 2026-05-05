@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { Dua } from '../data/rabbanas'
 import { useApp } from '../context/AppContext'
-import { addBookmark, removeBookmark } from '../services/bookmarksApi'
+import { useBookmarkToggle } from '../hooks/useBookmarkToggle'
+import { toast } from '../util/toast'
 
 interface DuaCardProps {
   dua: Dua
@@ -11,49 +11,19 @@ interface DuaCardProps {
 }
 
 export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
-  const {
-    language,
-    addToPrint,
-    removeFromPrint,
-    isInPrint,
-    isBookmarked,
-    bookmarkMap,
-    setBookmarkMap,
-    userToken,
-  } = useApp()
+  const { language, addToPrint, removeFromPrint, isInPrint } = useApp()
+  const { isBookmarked: bm, isLoading: bmLoading, showSparkle, toggle: toggleBookmark } = useBookmarkToggle(dua, onSignIn)
 
   const inPrint = isInPrint(dua.id)
-  const bm = isBookmarked(dua.id)
-  const key = String(dua.id)
-  const [bmLoading, setBmLoading] = useState(false)
-
-  const toggleBookmark = useCallback(async () => {
-    if (!userToken) { onSignIn(); return }
-    if (bmLoading) return
-    setBmLoading(true)
-    try {
-      if (bm) {
-        const bmId = bookmarkMap[key]
-        if (bmId) await removeBookmark(userToken, bmId).catch(() => {})
-        const { [key]: _, ...rest } = bookmarkMap
-        setBookmarkMap(rest)
-      } else {
-        try {
-          const created = await addBookmark(userToken, dua.surah, dua.ayah)
-          if (created.id) setBookmarkMap({ ...bookmarkMap, [key]: created.id })
-        } catch {
-          setBookmarkMap({ ...bookmarkMap, [key]: 'local' })
-        }
-      }
-    } finally {
-      setBmLoading(false)
-    }
-  }, [userToken, bmLoading, bm, bookmarkMap, key, dua.surah, dua.ayah, onSignIn, setBookmarkMap])
 
   return (
     <div
-      className="relative bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+      role="button"
+      tabIndex={0}
+      aria-label={`View full dua: ${dua.topic}, Surah ${dua.surah}:${dua.ayah}`}
+      className="relative bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-green"
       onClick={onPreview}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview() } }}
     >
       <img
         src="/dua-card-bg.svg"
@@ -62,15 +32,26 @@ export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
       />
 
       <div className="flex items-center gap-2 mb-3">
-        <span className="flex-1 text-sm font-semibold text-navy truncate">{dua.topic}</span>
+        <span className="flex-1 text-sm font-semibold text-green truncate">{dua.topic}</span>
 
         <div className="relative group" onClick={e => e.stopPropagation()}>
+          {showSparkle && (
+            <span aria-hidden="true" className="pointer-events-none absolute inset-0">
+              {[0,1,2,3,4].map(i => (
+                <span
+                  key={i}
+                  className="sparkle-dot absolute w-1 h-1 rounded-full bg-gold"
+                  style={{ top: '50%', left: '50%', '--angle': `${i * 72}deg`, animationDelay: `${i * 0.05}s` } as React.CSSProperties}
+                />
+              ))}
+            </span>
+          )}
           <button
             onClick={toggleBookmark}
             disabled={bmLoading}
             aria-label={bm ? 'Remove bookmark' : 'Save bookmark'}
-            className={`text-base rounded-full px-1.5 py-0.5 transition-colors disabled:opacity-40 ${
-              bm ? 'bg-gold/20 ring-1 ring-gold' : 'hover:opacity-60'
+            className={`w-11 h-11 flex items-center justify-center rounded-full transition-colors disabled:opacity-40 ${
+              bm ? 'bg-gold/20 ring-1 ring-gold' : 'hover:bg-gray-100'
             }`}
           >
             {bmLoading
@@ -87,23 +68,31 @@ export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
         </span>
       </div>
 
-      <p className="arabic text-xl text-right text-navy-dark leading-loose mb-1 line-clamp-2">
-        {dua.arabicText}
-      </p>
+      <div className="relative mb-1">
+        <p className="arabic text-xl text-right text-green-dark leading-loose line-clamp-2">
+          {dua.arabicText}
+        </p>
+        <div className="absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-white to-transparent pointer-events-none" aria-hidden="true" />
+      </div>
 
       <p className="text-xs text-gray-500 italic mb-2 truncate">{dua.transliteration}</p>
 
-      <p className="text-sm text-gray-700 leading-relaxed mb-3 line-clamp-2">
-        {dua.translations[language] ?? dua.translations.en}
-      </p>
+      <div className="relative mb-1">
+        <p className="text-sm text-gray-700 leading-relaxed line-clamp-2">
+          {dua.translations[language] ?? dua.translations.en}
+        </p>
+        <div className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none" aria-hidden="true" />
+      </div>
+      <p className="text-[11px] text-green/60 mb-3 text-right">View full dua →</p>
 
       <div className="flex gap-2" onClick={e => e.stopPropagation()}>
         <button
-          onClick={() => inPrint ? removeFromPrint(dua.id) : addToPrint(dua)}
+          onClick={() => { if (inPrint) { removeFromPrint(dua.id) } else { addToPrint(dua); toast('Added to print collection ✓') } }}
+          aria-label={inPrint ? 'Remove from print collection' : 'Add to print collection'}
           className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
             inPrint
-              ? 'bg-navy text-white border-navy'
-              : 'text-navy border-navy hover:bg-navy hover:text-white'
+              ? 'bg-green text-white border-green'
+              : 'text-green border-green hover:bg-green hover:text-white'
           }`}
         >
           {inPrint ? '✓ In Print' : '+ Add to Print'}

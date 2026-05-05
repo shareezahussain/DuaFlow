@@ -40,7 +40,7 @@ export default function DuaListPanel({ title, items, onRemove, onClose, footer }
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
-          <span className="font-bold text-navy text-sm">{title} ({items.length})</span>
+          <span className="font-bold text-green text-sm">{title} ({items.length})</span>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
         </div>
 
@@ -53,9 +53,9 @@ export default function DuaListPanel({ title, items, onRemove, onClose, footer }
               {items.map(item => (
                 <li key={item.id} className="flex items-start gap-3 bg-gray-50 rounded-xl px-3 py-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-navy truncate">{item.topic}</p>
+                    <p className="text-xs font-semibold text-green truncate">{item.topic}</p>
                     <p className="text-xs text-gray-400 mb-1">{item.surah}:{item.ayah}</p>
-                    <p className="arabic text-sm text-right text-navy-dark leading-loose line-clamp-2">
+                    <p className="arabic text-sm text-right text-green-dark leading-loose line-clamp-2">
                       {item.arabicText}
                     </p>
                   </div>

@@ -1,40 +1,46 @@
 /**
- * Vercel serverless function — proxies bookmark requests to the Quran
- * Foundation User API to avoid CORS issues in production.
+ * GET  /api/bookmarks  — list bookmarks
+ * POST /api/bookmarks  — add bookmark
  *
- * Supports: GET (list), POST (add), DELETE (remove by id).
+ * DELETE /api/bookmarks/:id is handled by api/bookmarks/[id].js
  */
 import { getQfOAuthConfig } from './config/qfOAuthConfig.js'
 
 export default async function handler(req, res) {
-  const { apiBaseUrl, clientId } = getQfOAuthConfig()
-  const BASE = `${apiBaseUrl}/auth/v1/bookmarks`
-
-  // Forward user auth headers from the browser
-  const headers = {
-    'x-auth-token': req.headers['x-auth-token'] ?? '',
-    'x-client-id':  req.headers['x-client-id']  ?? clientId,
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // Build URL — DELETE passes bookmark id as path segment
-  // e.g. /api/bookmarks/abc123 → DELETE BASE/abc123
-  const segments   = (req.url ?? '').replace(/^\/api\/bookmarks\/?/, '').split('?')
-  const bookmarkId = segments[0] || ''
-  const qs         = segments[1] ? `?${segments[1]}` : ''
-  const url        = bookmarkId ? `${BASE}/${bookmarkId}${qs}` : `${BASE}${qs}`
+  const { apiBaseUrl, clientId } = getQfOAuthConfig()
 
-  const options = { method: req.method, headers }
+  // Bookmark data is user-specific — never cache
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+
+  const headers = {
+    'x-auth-token':  req.headers['x-auth-token'] ?? '',
+    'x-client-id':   req.headers['x-client-id']  ?? clientId,
+    'Cache-Control': 'no-cache',
+    'Pragma':        'no-cache',
+  }
+
+  const queryPart = (req.url ?? '').split('?')[1]
+  const url = `${apiBaseUrl}/auth/v1/bookmarks${queryPart ? `?${queryPart}` : ''}`
 
   if (req.method === 'POST') {
     headers['Content-Type'] = 'application/json'
-    options.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body)
   }
 
-  const upstream = await fetch(url, options)
+  const upstream = await fetch(url, {
+    method:  req.method,
+    headers,
+    body:    req.method === 'POST' ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body)) : undefined,
+    signal:  AbortSignal.timeout(10_000),
+  }).catch(() => null)
 
-  if (upstream.status === 204) {
-    return res.status(204).end()
-  }
+  if (!upstream) return res.status(502).json({ error: 'Upstream request failed' })
+  if (upstream.status === 204) return res.status(204).end()
+  if (upstream.status === 304) return res.status(200).json([])
 
   const data = await upstream.json().catch(() => null)
   return res.status(upstream.status).json(data)

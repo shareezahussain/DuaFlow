@@ -3,10 +3,10 @@ export default function Footer() {
 
   return (
     <footer className="bg-white text-center py-8 px-4 mt-8 border-t border-gray-100">
-      <p className="text-navy text-sm mb-1">
+      <p className="text-green text-sm mb-1">
         Create, share, and experience duas in a beautiful, interactive way.
       </p>
-      <p className="text-navy text-xs opacity-60">
+      <p className="text-gold-dark text-xs opacity-60">
         Created by Shareeza &amp; Shafeeza &copy; {year}
       </p>
     </footer>

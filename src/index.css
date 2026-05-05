@@ -16,6 +16,13 @@
   unicode-bidi: embed;
 }
 
+/* Sparkle burst — used by "Read Today" button on DuaDetailPage */
+@keyframes sparkle {
+  0%   { transform: translate(-50%, -50%) rotate(var(--angle, 0deg)) translateY(0)     scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--angle, 0deg)) translateY(-18px) scale(0); opacity: 0; }
+}
+.sparkle-dot { animation: sparkle 0.65s ease-out forwards; }
+
 /* Smooth scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

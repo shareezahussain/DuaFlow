@@ -55,7 +55,7 @@ export default function AuthCallbackPage() {
         <p className="text-red-600 text-sm text-center max-w-sm">{error}</p>
         <button
           onClick={() => navigate('/')}
-          className="px-6 py-2 bg-navy text-white rounded-full text-sm font-semibold hover:bg-navy-light"
+          className="px-6 py-2 bg-green text-white rounded-full text-sm font-semibold hover:bg-green-light"
         >
           Back to home
         </button>
@@ -65,7 +65,7 @@ export default function AuthCallbackPage() {
 
   return (
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-3">
-      <div className="w-10 h-10 border-4 border-navy border-t-transparent rounded-full animate-spin" />
+      <div className="w-10 h-10 border-4 border-green border-t-transparent rounded-full animate-spin" />
       <p className="text-gray-500 text-sm">Signing you in…</p>
     </div>
   )

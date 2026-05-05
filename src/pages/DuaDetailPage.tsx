@@ -6,15 +6,14 @@ import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import Footer from '../components/Footer'
 import SignInModal from '../components/SignInModal'
-import { addBookmark, removeBookmark } from '../services/bookmarksApi'
 import { downloadVideoFile } from '../util/downloadVideo'
+import { useBookmarkToggle } from '../hooks/useBookmarkToggle'
+import { LANG_LABELS } from '../util/constants'
 import { generateIOSVideo } from '../util/generateIOSVideo'
 import { toErrorMessage } from '../util/errorMessage'
 import { decodeAudio } from '../util/decodeAudio'
 import { isIOS as deviceIsIOS, isMobileDevice, VIDEO_W, VIDEO_H } from '../util/deviceDetect'
 import { spawnVideoWorker } from '../util/spawnVideoWorker'
-
-const LANG_LABELS = { en: 'English', ur: 'اردو', bn: 'বাংলা' } as const
 
 const RECITERS = [
   { id: 'Alafasy',  name: 'Mishary Al Afasy' },
@@ -88,41 +87,18 @@ function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: str
 export default function DuaDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { language, setLanguage, addToPrint,
-          userToken, bookmarkMap, setBookmarkMap, isBookmarked } = useApp()
+  const { language, setLanguage, addToPrint } = useApp()
   const { duas, isLoading } = useQuranContent()
 
   const dua = duas.find(d => d.id === Number(id))
-  const bookmarked = dua ? isBookmarked(dua.id) : false
 
-  const [showSignIn,       setShowSignIn]       = useState(false)
-  const [bookmarkLoading,  setBookmarkLoading]  = useState(false)
+  const [showSignIn, setShowSignIn] = useState(false)
 
-  async function handleToggleBookmark() {
-    if (!dua) return
-    if (!userToken) { setShowSignIn(true); return }
-    setBookmarkLoading(true)
-    const key = String(dua.id)
-    try {
-      if (bookmarked) {
-        const bmId = bookmarkMap[key]
-        if (bmId) await removeBookmark(userToken, bmId).catch(() => {})
-        const updated = { ...bookmarkMap }
-        delete updated[key]
-        setBookmarkMap(updated)
-      } else {
-        try {
-          const created = await addBookmark(userToken, dua.surah, dua.ayah)
-          setBookmarkMap({ ...bookmarkMap, [key]: created.id })
-        } catch {
-          // API unavailable (e.g. bookmark scope not yet enabled) — save locally
-          setBookmarkMap({ ...bookmarkMap, [key]: 'local' })
-        }
-      }
-    } finally {
-      setBookmarkLoading(false)
-    }
-  }
+  const {
+    isBookmarked: bookmarked,
+    isLoading: bookmarkLoading,
+    toggle: handleToggleBookmark,
+  } = useBookmarkToggle(dua ?? { id: 0, surah: 0, ayah: 0 }, () => setShowSignIn(true))
 
   // Audio state
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -188,7 +164,7 @@ export default function DuaDetailPage() {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-navy border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-4 border-green border-t-transparent rounded-full animate-spin" />
           <p className="text-gray-500 text-sm">Loading dua…</p>
         </div>
       </div>
@@ -456,20 +432,20 @@ export default function DuaDetailPage() {
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
-      <header className="bg-navy sticky top-0 z-10 shadow-md">
+      <header className="bg-green sticky top-0 z-10 shadow-md">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
 
           <HomeButton />
           <div className="flex-1 text-center">
             <p className="text-white font-bold">{dua.topic}</p>
-            <p className="text-navy-muted text-xs">Surah {dua.surah}:{dua.ayah}</p>
+            <p className="text-green-muted text-xs">Surah {dua.surah}:{dua.ayah}</p>
           </div>
           <button
             onClick={handleToggleBookmark}
             disabled={bookmarkLoading}
             aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this dua'}
             className={`text-xl px-2 py-1 rounded-full transition-colors disabled:opacity-50 ${
-              bookmarked ? 'text-gold' : 'text-navy-muted hover:text-gold'
+              bookmarked ? 'text-gold' : 'text-green-muted hover:text-gold'
             }`}
           >
             {bookmarkLoading
@@ -481,7 +457,7 @@ export default function DuaDetailPage() {
 
       <main className="max-w-2xl mx-auto px-4 py-5 space-y-4">
         {/* Topic badge */}
-        <span className="inline-block bg-navy text-white text-xs font-semibold px-4 py-1.5 rounded-full">
+        <span className="inline-block bg-green text-white text-xs font-semibold px-4 py-1.5 rounded-full">
           {dua.topic}
         </span>
 
@@ -493,7 +469,7 @@ export default function DuaDetailPage() {
               <span
                 key={i}
                 className={`inline transition-colors px-1 rounded ${
-                  highlightedArabic === i ? 'text-[#c0392b] bg-red-50' : 'text-navy-dark'
+                  highlightedArabic === i ? 'text-[#c0392b] bg-red-50' : 'text-green-dark'
                 }`}
               >
                 {word}{' '}
@@ -527,8 +503,8 @@ export default function DuaDetailPage() {
               onClick={() => setLanguage(lang)}
               className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
                 language === lang
-                  ? 'bg-navy border-navy text-white font-bold'
-                  : 'border-navy text-navy hover:bg-navy hover:text-white'
+                  ? 'bg-green border-green text-white font-bold'
+                  : 'border-green text-green hover:bg-green hover:text-white'
               }`}
             >
               {LANG_LABELS[lang]}
@@ -565,8 +541,8 @@ export default function DuaDetailPage() {
                 onClick={() => switchReciter(r.id)}
                 className={`shrink-0 px-3 py-1.5 rounded-full text-xs border transition-colors ${
                   selectedReciter === r.id
-                    ? 'bg-navy border-navy text-white font-semibold'
-                    : 'border-gray-300 text-gray-500 hover:border-navy'
+                    ? 'bg-green border-green text-white font-semibold'
+                    : 'border-gray-300 text-gray-500 hover:border-green'
                 }`}
               >
                 {r.name}
@@ -577,7 +553,7 @@ export default function DuaDetailPage() {
           {/* Progress bar */}
           <div className="h-1.5 bg-gray-100 rounded-full mb-1 overflow-hidden">
             <div
-              className="h-full bg-navy rounded-full transition-all"
+              className="h-full bg-green rounded-full transition-all"
               style={{ width: `${progress * 100}%` }}
             />
           </div>
@@ -610,7 +586,8 @@ export default function DuaDetailPage() {
             <select
               value={speed}
               onChange={e => changeSpeed(Number(e.target.value))}
-              className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-navy"
+              aria-label="Playback speed"
+              className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-green"
             >
               {SPEEDS.map(s => (
                 <option key={s} value={s}>{s}×</option>
@@ -618,8 +595,10 @@ export default function DuaDetailPage() {
             </select>
             <button
               onClick={toggleRepeat}
+              aria-label={repeat ? 'Repeat on — click to turn off' : 'Repeat off — click to turn on'}
+              aria-pressed={repeat}
               className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
-                repeat ? 'bg-navy border-navy text-white' : 'border-gray-200 text-gray-500 hover:border-navy'
+                repeat ? 'bg-green border-green text-white' : 'border-gray-200 text-gray-500 hover:border-green'
               }`}
             >
               🔁 {repeat ? 'On' : 'Off'}
@@ -637,13 +616,13 @@ export default function DuaDetailPage() {
         <div className="flex gap-3">
           <button
             onClick={() => { addToPrint(dua); navigate('/print') }}
-            className="flex-1 py-4 rounded-2xl bg-navy-dark hover:bg-navy text-white font-bold text-sm transition-colors"
+            className="flex-1 py-4 rounded-2xl bg-green-dark hover:bg-green text-white font-bold text-sm transition-colors"
           >
             🎨 Design &amp; Print
           </button>
           <button
             onClick={() => setShowSharePanel(p => !p)}
-            className={`flex-1 py-4 rounded-2xl font-bold text-sm transition-colors ${showSharePanel ? 'bg-navy text-white' : 'bg-gold hover:bg-gold-dark text-white'}`}
+            className={`flex-1 py-4 rounded-2xl font-bold text-sm transition-colors ${showSharePanel ? 'bg-green text-white' : 'bg-gold hover:bg-gold-dark text-white'}`}
           >
             <svg className="inline-block w-5 h-5 mr-1.5 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="22" y1="2" x2="11" y2="13" />
