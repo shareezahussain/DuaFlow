@@ -295,7 +295,17 @@ export const useApp = create<AppStore>()(
             : undefined;
           const bookmarks = await fetchBookmarks(t, refreshFn);
           set({ bookmarkMap: bookmarksToMap(bookmarks) });
-        } catch { /* non-fatal */ }
+        } catch (e) {
+          // Sign out on any auth failure so the user sees the sign-in prompt
+          // instead of appearing logged-in with zero bookmarks.
+          // Covers: expired access token (401), expired refresh token, inactive token.
+          const msg = e instanceof Error ? e.message : ''
+          // Extract HTTP status from error message and sign out on any 4xx auth failure.
+          // QF API returns: 400 (malformed token), 401 (invalid), 403 (expired/inactive).
+          const status = parseInt(msg.match(/\d{3}/)?.[0] ?? '0')
+          const isAuthFailure = (status >= 400 && status < 500) || msg.includes('refresh')
+          if (isAuthFailure) get().signOut()
+        }
       },
       flagBookmarkDeleted: (bookmarkApiId) => {
         _deletedIds.add(bookmarkApiId);
