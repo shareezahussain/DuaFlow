@@ -206,14 +206,33 @@ async function authFetch(
 }
 
 export async function fetchBookmarks(token: string, refreshFn?: () => Promise<string>): Promise<QFBookmark[]> {
-  const resp = await authFetch(`${BOOKMARKS_URL}?mushafId=1&type=ayah&first=20`, {
-    headers: { 'Cache-Control': 'no-cache' },
-  }, token, refreshFn);
-  // 304 = not modified — caller keeps its existing map
-  if (resp.status === 304) return [];
-  if (!resp.ok) throw new Error(`Fetch bookmarks failed: ${resp.status}`);
-  const data = await resp.json();
-  return Array.isArray(data) ? data : (data.data ?? data.bookmarks ?? []);
+  const all: QFBookmark[] = [];
+  let after: string | undefined;
+
+  // API enforces max first=20 — paginate until all bookmarks are fetched
+  while (true) {
+    const query = new URLSearchParams({ mushafId: '1', type: 'ayah', first: '20' });
+    if (after) query.set('after', after);
+
+    const resp = await authFetch(`${BOOKMARKS_URL}?${query}`, {
+      headers: { 'Cache-Control': 'no-cache' },
+    }, token, refreshFn);
+
+    if (resp.status === 304) break;
+    if (!resp.ok) throw new Error(`Fetch bookmarks failed: ${resp.status}`);
+
+    const data = await resp.json();
+    const page: QFBookmark[] = Array.isArray(data) ? data : (data.data ?? data.bookmarks ?? []);
+    all.push(...page);
+
+    // Stop when we get fewer than a full page — no more results
+    if (page.length < 20) break;
+
+    after = page[page.length - 1]?.id;
+    if (!after) break;
+  }
+
+  return all;
 }
 
 export async function addBookmark(

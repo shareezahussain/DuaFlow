@@ -61,7 +61,6 @@ export const RABBANA_META: DuaMeta[] = [
   { id: 35, surah: 60, ayah: 4,   topic: "Trust in Allah",                   categories: ['peace'] },
   { id: 36, surah: 60, ayah: 5,   topic: "Protection from Fitnah",           categories: ['peace'] },
   { id: 37, surah: 66, ayah: 8,   topic: "Light & Forgiveness",              categories: ['forgiveness'] },
-  { id: 38, surah: 2,  ayah: 286, topic: "Ease & Forgiveness",               categories: ['forgiveness', 'healing', 'peace'] },
-  { id: 39, surah: 2,  ayah: 286, topic: "Pardon & Victory",                 categories: ['forgiveness', 'peace'] },
+  { id: 38, surah: 2,  ayah: 286, topic: "Ease, Forgiveness & Pardon",        categories: ['forgiveness', 'healing', 'peace'] },
   { id: 40, surah: 3,  ayah: 38,  topic: "Righteous Children",               categories: ['provision'] },
 ];

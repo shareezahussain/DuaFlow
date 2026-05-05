@@ -8,23 +8,13 @@ import PrintDesignerPage from './src/pages/PrintDesignerPage'
 import AuthCallbackPage from './src/pages/AuthCallbackPage'
 import Toast from './src/components/Toast'
 
-// Syncs bookmarks from the API on mount and whenever the user returns to the tab.
-// Runs at app-root so every page benefits regardless of navigation path.
-function BookmarkSyncer() {
-  const { userToken, refreshBookmarks } = useApp()
+// Loads bookmarks on mount for returning visitors (userToken persisted, bookmarkMap is not).
+function BookmarkLoader() {
+  const { userToken, loadBookmarks } = useApp()
 
   useEffect(() => {
-    if (userToken) refreshBookmarks()
+    if (userToken) loadBookmarks()
   }, [userToken]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const onFocus = () => {
-      const { userToken: t, refreshBookmarks: refresh } = useApp.getState()
-      if (t) refresh()
-    }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [])
 
   return null
 }
@@ -34,7 +24,7 @@ export default function App() {
     <AppProvider>
       <QuranContentProvider>
         <BrowserRouter>
-          <BookmarkSyncer />
+          <BookmarkLoader />
           <Routes>
             <Route path="/" element={<RootPage />} />
             <Route path="/dua/:id" element={<DuaDetailPage />} />

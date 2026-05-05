@@ -39,7 +39,7 @@ export default function BookmarksPanel({ onClose }: Props) {
   const { bookmarkMap } = useApp()
   const { duas } = useQuranContent()
 
-  const items = duas.filter(d => String(d.id) in bookmarkMap)
+  const items = duas.filter(d => `${d.surah}:${d.ayah}` in bookmarkMap)
 
   return (
     <div

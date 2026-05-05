@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { Dua, RABBANA_META } from "../data/rabbanas";
+import { Dua } from "../data/rabbanas";
 import { QFBookmark, startLogin as pkceStartLogin, fetchBookmarks, fetchUserProfile, decodeJwtPayload, refreshAccessToken } from "../services/bookmarksApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -71,65 +71,48 @@ export const DEFAULT_DESIGN: DesignSettings = {
   emojiOverlays: [],
 };
 
-// ── Store ─────────────────────────────────────────────────────────────────────
+// ── Recently-deleted filter ───────────────────────────────────────────────────
+//
+// The QF GET endpoint has server-side caching — a successful DELETE is NOT
+// reflected in GET responses for several minutes (confirmed via curl: deleted
+// bookmark still appears 30 s after DELETE returns 200 success).
+//
+// We persist deleted IDs to localStorage so the filter survives page reloads
+// and sign-out → sign-in within the same cache window.
+// TTL = 10 min (longer than the observed cache window). Clears automatically.
 
-let _bookmarkLastFetch = 0
-const BOOKMARK_COOLDOWN_MS = 30_000
+const DELETED_CACHE_KEY = 'duaflow-deleted-ids'
+const DELETED_CACHE_TTL = 10 * 60 * 1_000
 
-// QF API GET has server-side caching — adds and deletes may not reflect
-// immediately in the next GET response. We persist both sets to localStorage
-// so the filters survive page refreshes. TTL = 5 minutes.
-const BOOKMARK_CACHE_TTL = 5 * 60 * 1_000
-
-function loadSet(key: string): Set<string> {
+function loadDeletedIds(): Set<string> {
   try {
-    const raw = localStorage.getItem(key)
+    const raw = localStorage.getItem(DELETED_CACHE_KEY)
     if (!raw) return new Set()
     const { ids, ts }: { ids: string[]; ts: number } = JSON.parse(raw)
-    if (Date.now() - ts > BOOKMARK_CACHE_TTL) { localStorage.removeItem(key); return new Set() }
+    if (Date.now() - ts > DELETED_CACHE_TTL) { localStorage.removeItem(DELETED_CACHE_KEY); return new Set() }
     return new Set(ids)
   } catch { return new Set() }
 }
 
-function saveSet(key: string, set: Set<string>) {
-  try { localStorage.setItem(key, JSON.stringify({ ids: [...set], ts: Date.now() })) } catch { /* quota */ }
+function saveDeletedIds(set: Set<string>) {
+  try { localStorage.setItem(DELETED_CACHE_KEY, JSON.stringify({ ids: [...set], ts: Date.now() })) } catch { /* quota */ }
 }
 
-function loadMap(key: string): Map<string, string> {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return new Map()
-    const { entries, ts }: { entries: [string, string][]; ts: number } = JSON.parse(raw)
-    if (Date.now() - ts > BOOKMARK_CACHE_TTL) { localStorage.removeItem(key); return new Map() }
-    return new Map(entries)
-  } catch { return new Map() }
-}
+const _deletedIds: Set<string> = loadDeletedIds()
 
-function saveMap(key: string, map: Map<string, string>) {
-  try { localStorage.setItem(key, JSON.stringify({ entries: [...map], ts: Date.now() })) } catch { /* quota */ }
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const PENDING_DELETES_KEY = 'duaflow-pending-deletes'
-const PENDING_ADDS_KEY    = 'duaflow-pending-adds'
-
-const _pendingDeletes: Set<string>           = loadSet(PENDING_DELETES_KEY)
-const _pendingAdds:    Map<string, string>   = loadMap(PENDING_ADDS_KEY)
-
-// Build a bookmarkMap from server data, applying local pending state so that
-// recently deleted bookmarks are not restored and recently added ones survive
-// a stale GET response.
-function buildBookmarkMap(bookmarks: QFBookmark[]): Record<string, string> {
-  const map: Record<string, string> = {}
+function bookmarksToMap(bookmarks: QFBookmark[]): Record<string, string> {
+  const map: Record<string, string> = {};
   bookmarks.forEach(b => {
-    if (!b.key || !b.verseNumber || !b.id) return
-    if (_pendingDeletes.has(b.id)) return
-    RABBANA_META.filter(m => m.surah === b.key && m.ayah === b.verseNumber)
-      .forEach(m => { map[String(m.id)] = b.id })
-  })
-  // Merge locally added bookmarks not yet in the server response
-  _pendingAdds.forEach((apiId, duaId) => { if (!(duaId in map)) map[duaId] = apiId })
-  return map
+    if (!b.key || !b.verseNumber || !b.id) return;
+    if (_deletedIds.has(b.id)) return; // server cache still returning this — ignore
+    map[`${b.key}:${b.verseNumber}`] = b.id;
+  });
+  return map;
 }
+
+// ── Store ─────────────────────────────────────────────────────────────────────
 
 interface AppStore {
   language: Language;
@@ -164,10 +147,9 @@ interface AppStore {
   // Bookmarks — duaId -> QF bookmark ID
   bookmarkMap: Record<string, string>;
   updateBookmarkMap: (updater: (current: Record<string, string>) => Record<string, string>) => void;
-  isBookmarked: (duaId: number) => boolean;
-  refreshBookmarks: () => Promise<void>;
-  flagBookmarkDeleted: (bookmarkApiId: string, duaId?: string) => void;
-  flagBookmarkAdded: (duaId: string, bookmarkApiId: string) => void;
+  isBookmarked: (surah: number, ayah: number) => boolean;
+  loadBookmarks: (token?: string) => Promise<void>;
+  flagBookmarkDeleted: (bookmarkApiId: string) => void;
 }
 
 export const useApp = create<AppStore>()(
@@ -231,122 +213,101 @@ export const useApp = create<AppStore>()(
       setUserToken: (token) => set({ userToken: token }),
       setRefreshToken: (token) => set({ refreshToken: token }),
       loadUserProfile: (userId) => {
-        const raw = localStorage.getItem(`duaflow-user-${userId}`)
+        const raw = localStorage.getItem(`duaflow-user-${userId}`);
         if (raw) {
           try {
-            const saved = JSON.parse(raw)
-            set({ userId, printCollection: saved.printCollection ?? [], design: { ...DEFAULT_DESIGN, ...(saved.design ?? {}) } })
-            return
+            const saved = JSON.parse(raw);
+            set({ userId, printCollection: saved.printCollection ?? [], design: { ...DEFAULT_DESIGN, ...(saved.design ?? {}) } });
+            return;
           } catch { /* fall through */ }
         }
-        set({ userId, printCollection: [], design: DEFAULT_DESIGN })
+        set({ userId, printCollection: [], design: DEFAULT_DESIGN });
       },
       applyAuthTokens: async ({ access_token, refresh_token, id_token }) => {
-        set({ userToken: access_token })
-        if (refresh_token) set({ refreshToken: refresh_token })
+        set({ userToken: access_token });
+        if (refresh_token) set({ refreshToken: refresh_token });
 
-        // Restore per-user print/design settings
-        const sub = decodeJwtPayload(access_token)?.sub as string | undefined
-        if (sub) get().loadUserProfile(sub)
+        const sub = decodeJwtPayload(access_token)?.sub as string | undefined;
+        if (sub) get().loadUserProfile(sub);
 
-        // Extract name + picture — try id_token first, access_token as fallback
-        const candidates = [id_token, access_token].filter((t): t is string => !!t)
+        const candidates = [id_token, access_token].filter((t): t is string => !!t);
         const name = candidates.reduce<string | null>((found, tok) => {
-          if (found) return found
-          const p = decodeJwtPayload(tok)
-          return ((p?.name ?? p?.given_name ?? p?.first_name ?? p?.preferred_username ?? (p?.email as string | undefined)?.split('@')[0]) as string) || null
-        }, null)
-        const picture = candidates.map(t => decodeJwtPayload(t)?.picture as string | undefined).find(Boolean) ?? null
+          if (found) return found;
+          const p = decodeJwtPayload(tok);
+          return ((p?.name ?? p?.given_name ?? p?.first_name ?? p?.preferred_username ?? (p?.email as string | undefined)?.split('@')[0]) as string) || null;
+        }, null);
+        const picture = candidates.map(t => decodeJwtPayload(t)?.picture as string | undefined).find(Boolean) ?? null;
 
         if (name) {
-          set({ userName: name, userPicture: picture ?? null })
+          set({ userName: name, userPicture: picture ?? null });
         } else {
           try {
-            const profile = await fetchUserProfile(access_token)
+            const profile = await fetchUserProfile(access_token);
             set({
               userName: (profile.name ?? profile.given_name ?? profile.first_name ?? profile.preferred_username ?? profile.email?.split('@')[0]) ?? null,
               userPicture: profile.picture ?? null,
-            })
+            });
           } catch { /* non-fatal */ }
         }
 
-        // Load bookmarks
-        try {
-          const bookmarks = await fetchBookmarks(access_token)
-          set({ bookmarkMap: buildBookmarkMap(bookmarks) })
-        } catch { /* non-fatal */ }
+        await get().loadBookmarks(access_token);
       },
       fetchAndSetUserName: async () => {
-        const { userToken } = get()
-        if (!userToken) return
-        const p = decodeJwtPayload(userToken)
-        const name = ((p?.name ?? p?.given_name ?? p?.first_name ?? p?.preferred_username ?? (p?.email as string | undefined)?.split('@')[0]) as string) || null
-        if (name) { set({ userName: name, userPicture: (p?.picture as string | null) ?? null }); return }
+        const { userToken } = get();
+        if (!userToken) return;
+        const p = decodeJwtPayload(userToken);
+        const name = ((p?.name ?? p?.given_name ?? p?.first_name ?? p?.preferred_username ?? (p?.email as string | undefined)?.split('@')[0]) as string) || null;
+        if (name) { set({ userName: name, userPicture: (p?.picture as string | null) ?? null }); return; }
         try {
-          const profile = await fetchUserProfile(userToken)
+          const profile = await fetchUserProfile(userToken);
           set({
             userName: (profile.name ?? profile.given_name ?? profile.first_name ?? profile.preferred_username ?? profile.email?.split('@')[0]) ?? null,
             userPicture: profile.picture ?? null,
-          })
-        } catch (e) { console.error('fetchUserProfile failed:', e) }
+          });
+        } catch (e) { console.error('fetchUserProfile failed:', e); }
       },
       startLogin: async () => {
-        const tokens = await pkceStartLogin()
-        await get().applyAuthTokens(tokens)
+        const tokens = await pkceStartLogin();
+        await get().applyAuthTokens(tokens);
       },
       signOut: () => {
-        const { userId, printCollection, design } = get()
+        const { userId, printCollection, design } = get();
         if (userId) {
-          localStorage.setItem(`duaflow-user-${userId}`, JSON.stringify({ printCollection, design }))
+          localStorage.setItem(`duaflow-user-${userId}`, JSON.stringify({ printCollection, design }));
         }
-        ['pkce_verifier', 'pkce_state', 'pkce_nonce', 'pkce_redirect_uri'].forEach(k => localStorage.removeItem(k))
-        localStorage.setItem('qf_force_login', '1')
-        // Do NOT clear _pendingDeletes/_pendingAdds here — they must survive sign-out/sign-in
-        // so that stale QF server cache doesn't restore recently deleted bookmarks.
-        // The 5-minute TTL in loadSet/loadMap handles natural expiry.
-        set({ userToken: null, refreshToken: null, bookmarkMap: {}, userId: null, userName: null, userPicture: null, printCollection: [], design: DEFAULT_DESIGN })
+        ['pkce_verifier', 'pkce_state', 'pkce_nonce', 'pkce_redirect_uri'].forEach(k => localStorage.removeItem(k));
+        localStorage.setItem('qf_force_login', '1');
+        set({ userToken: null, refreshToken: null, bookmarkMap: {}, userId: null, userName: null, userPicture: null, printCollection: [], design: DEFAULT_DESIGN });
       },
 
       // Bookmarks
       bookmarkMap: {},
       updateBookmarkMap: (updater) =>
         set(state => ({ bookmarkMap: updater(state.bookmarkMap) })),
-      isBookmarked: (duaId) => String(duaId) in get().bookmarkMap,
-      flagBookmarkDeleted: (bookmarkApiId, duaId) => {
-        _pendingDeletes.add(bookmarkApiId)
-        saveSet(PENDING_DELETES_KEY, _pendingDeletes)
-        if (duaId) {
-          _pendingAdds.delete(duaId)
-          saveMap(PENDING_ADDS_KEY, _pendingAdds)
-        }
-      },
-      flagBookmarkAdded: (duaId, bookmarkApiId) => {
-        _pendingAdds.set(duaId, bookmarkApiId)
-        saveMap(PENDING_ADDS_KEY, _pendingAdds)
-      },
-      refreshBookmarks: async () => {
-        const { userToken, refreshToken } = get()
-        if (!userToken) return
-
-        if (Date.now() - _bookmarkLastFetch < BOOKMARK_COOLDOWN_MS) return
-
+      isBookmarked: (surah, ayah) => `${surah}:${ayah}` in get().bookmarkMap,
+      loadBookmarks: async (token) => {
+        const t = token ?? get().userToken;
+        if (!t) return;
         try {
+          const { refreshToken, setUserToken } = get();
           const refreshFn = refreshToken
-            ? async () => {
-                const newToken = await refreshAccessToken(refreshToken)
-                set({ userToken: newToken })
-                return newToken
-              }
-            : undefined
-          const bookmarks = await fetchBookmarks(userToken, refreshFn)
-          _bookmarkLastFetch = Date.now()
-          set({ bookmarkMap: buildBookmarkMap(bookmarks) })
-        } catch { /* non-fatal — keep existing map */ }
+            ? async () => { const newToken = await refreshAccessToken(refreshToken); setUserToken(newToken); return newToken; }
+            : undefined;
+          const bookmarks = await fetchBookmarks(t, refreshFn);
+          set({ bookmarkMap: bookmarksToMap(bookmarks) });
+        } catch { /* non-fatal */ }
+      },
+      flagBookmarkDeleted: (bookmarkApiId) => {
+        _deletedIds.add(bookmarkApiId);
+        saveDeletedIds(_deletedIds);
+        setTimeout(() => {
+          _deletedIds.delete(bookmarkApiId);
+          saveDeletedIds(_deletedIds);
+        }, DELETED_CACHE_TTL);
       },
     }),
     {
       name: "duaflow-store",
-      // Never persist refreshToken — keep it in memory only (spec requirement)
       partialize: (state) => {
         const { refreshToken: _rt, bookmarkMap: _bm, ...rest } = state;
         return rest;

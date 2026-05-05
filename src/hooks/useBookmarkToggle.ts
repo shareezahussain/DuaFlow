@@ -22,8 +22,8 @@ export function useBookmarkToggle(
     }
   }, [])
 
-  const isBookmarkedNow = isBookmarked(dua.id)
-  const key = String(dua.id)
+  const isBookmarkedNow = isBookmarked(dua.surah, dua.ayah)
+  const key = `${dua.surah}:${dua.ayah}`
 
   const toggle = useCallback(async () => {
     if (!userToken) { onSignIn(); return }
@@ -31,13 +31,8 @@ export function useBookmarkToggle(
     if (mountedRef.current) setIsLoading(true)
 
     try {
-      // Read fresh state to avoid stale closures
-      const { bookmarkMap, refreshToken, setUserToken } = useApp.getState()
-      const bmId = bookmarkMap[key]
+      const { bookmarkMap, refreshToken, setUserToken, loadBookmarks } = useApp.getState()
 
-      // Build a refresh function so expired tokens are retried automatically.
-      // refreshToken is in-memory only (not persisted) — available for the
-      // lifetime of the session without a page reload.
       const refreshFn = refreshToken
         ? async () => {
             const newToken = await refreshAccessToken(refreshToken)
@@ -47,14 +42,24 @@ export function useBookmarkToggle(
         : undefined
 
       if (isBookmarkedNow) {
+        let bmId = bookmarkMap[key]
+
+        // If we don't have a real server ID, fetch fresh to find it before deleting
+        if (!bmId || bmId === 'local') {
+          await loadBookmarks()
+          bmId = useApp.getState().bookmarkMap[key]
+        }
+
+        // Optimistic remove from UI
         updateBookmarkMap(curr => { const { [key]: _, ...rest } = curr; return rest })
 
         if (bmId && bmId !== 'local') {
           try {
             await removeBookmark(userToken, bmId, refreshFn)
-            useApp.getState().flagBookmarkDeleted(bmId, key)
+            useApp.getState().flagBookmarkDeleted(bmId)
           } catch {
-            updateBookmarkMap(curr => ({ ...curr, [key]: bmId }))
+            // DELETE failed — restore the bookmark in UI
+            updateBookmarkMap(curr => ({ ...curr, [key]: bmId! }))
             toast('Could not remove bookmark — please try again')
           }
         }
@@ -62,10 +67,13 @@ export function useBookmarkToggle(
         updateBookmarkMap(curr => ({ ...curr, [key]: 'local' }))
         try {
           const created = await addBookmark(userToken, dua.surah, dua.ayah, refreshFn)
-          const apiId = created.id ?? 'local'
-          updateBookmarkMap(curr => ({ ...curr, [key]: apiId }))
-          useApp.getState().flagBookmarkAdded(key, apiId)
-        } catch { /* keep 'local' */ }
+          updateBookmarkMap(curr => ({ ...curr, [key]: created.id ?? 'local' }))
+        } catch {
+          // POST failed — remove the optimistic entry
+          updateBookmarkMap(curr => { const { [key]: _, ...rest } = curr; return rest })
+          toast('Could not save bookmark — please try again')
+          return
+        }
 
         toast('Dua saved to bookmarks ✓')
         if (mountedRef.current) {
