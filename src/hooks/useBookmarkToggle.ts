@@ -50,17 +50,21 @@ export function useBookmarkToggle(
         updateBookmarkMap(curr => { const { [key]: _, ...rest } = curr; return rest })
 
         if (bmId && bmId !== 'local') {
-          await removeBookmark(userToken, bmId, refreshFn)
-            .catch(() => {
-              updateBookmarkMap(curr => ({ ...curr, [key]: bmId }))
-              toast('Could not remove bookmark — please try again')
-            })
+          try {
+            await removeBookmark(userToken, bmId, refreshFn)
+            useApp.getState().flagBookmarkDeleted(bmId, key)
+          } catch {
+            updateBookmarkMap(curr => ({ ...curr, [key]: bmId }))
+            toast('Could not remove bookmark — please try again')
+          }
         }
       } else {
         updateBookmarkMap(curr => ({ ...curr, [key]: 'local' }))
         try {
           const created = await addBookmark(userToken, dua.surah, dua.ayah, refreshFn)
-          updateBookmarkMap(curr => ({ ...curr, [key]: created.id ?? 'local' }))
+          const apiId = created.id ?? 'local'
+          updateBookmarkMap(curr => ({ ...curr, [key]: apiId }))
+          useApp.getState().flagBookmarkAdded(key, apiId)
         } catch { /* keep 'local' */ }
 
         toast('Dua saved to bookmarks ✓')

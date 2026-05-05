@@ -206,7 +206,11 @@ async function authFetch(
 }
 
 export async function fetchBookmarks(token: string, refreshFn?: () => Promise<string>): Promise<QFBookmark[]> {
-  const resp = await authFetch(`${BOOKMARKS_URL}?mushafId=1&type=ayah&first=20`, {}, token, refreshFn);
+  const resp = await authFetch(`${BOOKMARKS_URL}?mushafId=1&type=ayah&first=20`, {
+    headers: { 'Cache-Control': 'no-cache' },
+  }, token, refreshFn);
+  // 304 = not modified — caller keeps its existing map
+  if (resp.status === 304) return [];
   if (!resp.ok) throw new Error(`Fetch bookmarks failed: ${resp.status}`);
   const data = await resp.json();
   return Array.isArray(data) ? data : (data.data ?? data.bookmarks ?? []);
@@ -231,7 +235,7 @@ export async function addBookmark(
 }
 
 export async function removeBookmark(token: string, bookmarkId: string, refreshFn?: () => Promise<string>): Promise<void> {
-  const resp = await authFetch(`${BOOKMARKS_URL}/${bookmarkId}`, { method: 'DELETE' }, token, refreshFn);
+  const resp = await authFetch(`${BOOKMARKS_URL}/${encodeURIComponent(bookmarkId)}`, { method: 'DELETE' }, token, refreshFn);
   if (!resp.ok) throw new Error(`Remove bookmark failed: ${resp.status}`);
 }
 

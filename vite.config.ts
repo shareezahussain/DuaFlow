@@ -10,6 +10,11 @@ export default defineConfig(({ mode }) => {
   const contentBase  = env.VITE_QURAN_CONTENT_BASE
   const basicAuth    = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
 
+  // Mirror getQfOAuthConfig — bookmarks live on the user API, not the content API
+  const qfApiBase = env.QF_ENV === 'production'
+    ? 'https://apis.quran.foundation'
+    : 'https://apis-prelive.quran.foundation'
+
   return {
     plugins: [react()],
     optimizeDeps: {
@@ -43,7 +48,7 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/api\/quran/, '/content/api/v4'),
         },
         '/api/bookmarks': {
-          target: contentBase, changeOrigin: true,
+          target: qfApiBase, changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/bookmarks/, '/auth/v1/bookmarks'),
         },
         '/api/userinfo': {

@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Dua, RABBANA_META } from "../data/rabbanas";
-import { startLogin as pkceStartLogin, fetchBookmarks, fetchUserProfile, decodeJwtPayload, refreshAccessToken } from "../services/bookmarksApi";
+import { QFBookmark, startLogin as pkceStartLogin, fetchBookmarks, fetchUserProfile, decodeJwtPayload, refreshAccessToken } from "../services/bookmarksApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -76,6 +76,61 @@ export const DEFAULT_DESIGN: DesignSettings = {
 let _bookmarkLastFetch = 0
 const BOOKMARK_COOLDOWN_MS = 30_000
 
+// QF API GET has server-side caching — adds and deletes may not reflect
+// immediately in the next GET response. We persist both sets to localStorage
+// so the filters survive page refreshes. TTL = 5 minutes.
+const BOOKMARK_CACHE_TTL = 5 * 60 * 1_000
+
+function loadSet(key: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return new Set()
+    const { ids, ts }: { ids: string[]; ts: number } = JSON.parse(raw)
+    if (Date.now() - ts > BOOKMARK_CACHE_TTL) { localStorage.removeItem(key); return new Set() }
+    return new Set(ids)
+  } catch { return new Set() }
+}
+
+function saveSet(key: string, set: Set<string>) {
+  try { localStorage.setItem(key, JSON.stringify({ ids: [...set], ts: Date.now() })) } catch { /* quota */ }
+}
+
+function loadMap(key: string): Map<string, string> {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return new Map()
+    const { entries, ts }: { entries: [string, string][]; ts: number } = JSON.parse(raw)
+    if (Date.now() - ts > BOOKMARK_CACHE_TTL) { localStorage.removeItem(key); return new Map() }
+    return new Map(entries)
+  } catch { return new Map() }
+}
+
+function saveMap(key: string, map: Map<string, string>) {
+  try { localStorage.setItem(key, JSON.stringify({ entries: [...map], ts: Date.now() })) } catch { /* quota */ }
+}
+
+const PENDING_DELETES_KEY = 'duaflow-pending-deletes'
+const PENDING_ADDS_KEY    = 'duaflow-pending-adds'
+
+const _pendingDeletes: Set<string>           = loadSet(PENDING_DELETES_KEY)
+const _pendingAdds:    Map<string, string>   = loadMap(PENDING_ADDS_KEY)
+
+// Build a bookmarkMap from server data, applying local pending state so that
+// recently deleted bookmarks are not restored and recently added ones survive
+// a stale GET response.
+function buildBookmarkMap(bookmarks: QFBookmark[]): Record<string, string> {
+  const map: Record<string, string> = {}
+  bookmarks.forEach(b => {
+    if (!b.key || !b.verseNumber || !b.id) return
+    if (_pendingDeletes.has(b.id)) return
+    RABBANA_META.filter(m => m.surah === b.key && m.ayah === b.verseNumber)
+      .forEach(m => { map[String(m.id)] = b.id })
+  })
+  // Merge locally added bookmarks not yet in the server response
+  _pendingAdds.forEach((apiId, duaId) => { if (!(duaId in map)) map[duaId] = apiId })
+  return map
+}
+
 interface AppStore {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -108,10 +163,11 @@ interface AppStore {
 
   // Bookmarks — duaId -> QF bookmark ID
   bookmarkMap: Record<string, string>;
-  setBookmarkMap: (map: Record<string, string>) => void;
   updateBookmarkMap: (updater: (current: Record<string, string>) => Record<string, string>) => void;
   isBookmarked: (duaId: number) => boolean;
   refreshBookmarks: () => Promise<void>;
+  flagBookmarkDeleted: (bookmarkApiId: string, duaId?: string) => void;
+  flagBookmarkAdded: (duaId: string, bookmarkApiId: string) => void;
 }
 
 export const useApp = create<AppStore>()(
@@ -217,13 +273,7 @@ export const useApp = create<AppStore>()(
         // Load bookmarks
         try {
           const bookmarks = await fetchBookmarks(access_token)
-          const map: Record<string, string> = {}
-          bookmarks.forEach(b => {
-            if (!b.key || !b.verseNumber || !b.id) return
-            RABBANA_META.filter(m => m.surah === b.key && m.ayah === b.verseNumber)
-              .forEach(m => { map[String(m.id)] = b.id })
-          })
-          set({ bookmarkMap: map })
+          set({ bookmarkMap: buildBookmarkMap(bookmarks) })
         } catch { /* non-fatal */ }
       },
       fetchAndSetUserName: async () => {
@@ -251,15 +301,29 @@ export const useApp = create<AppStore>()(
         }
         ['pkce_verifier', 'pkce_state', 'pkce_nonce', 'pkce_redirect_uri'].forEach(k => localStorage.removeItem(k))
         localStorage.setItem('qf_force_login', '1')
+        // Do NOT clear _pendingDeletes/_pendingAdds here — they must survive sign-out/sign-in
+        // so that stale QF server cache doesn't restore recently deleted bookmarks.
+        // The 5-minute TTL in loadSet/loadMap handles natural expiry.
         set({ userToken: null, refreshToken: null, bookmarkMap: {}, userId: null, userName: null, userPicture: null, printCollection: [], design: DEFAULT_DESIGN })
       },
 
       // Bookmarks
       bookmarkMap: {},
-      setBookmarkMap: (map) => set({ bookmarkMap: map }),
       updateBookmarkMap: (updater) =>
         set(state => ({ bookmarkMap: updater(state.bookmarkMap) })),
       isBookmarked: (duaId) => String(duaId) in get().bookmarkMap,
+      flagBookmarkDeleted: (bookmarkApiId, duaId) => {
+        _pendingDeletes.add(bookmarkApiId)
+        saveSet(PENDING_DELETES_KEY, _pendingDeletes)
+        if (duaId) {
+          _pendingAdds.delete(duaId)
+          saveMap(PENDING_ADDS_KEY, _pendingAdds)
+        }
+      },
+      flagBookmarkAdded: (duaId, bookmarkApiId) => {
+        _pendingAdds.set(duaId, bookmarkApiId)
+        saveMap(PENDING_ADDS_KEY, _pendingAdds)
+      },
       refreshBookmarks: async () => {
         const { userToken, refreshToken } = get()
         if (!userToken) return
@@ -275,14 +339,8 @@ export const useApp = create<AppStore>()(
               }
             : undefined
           const bookmarks = await fetchBookmarks(userToken, refreshFn)
-          const map: Record<string, string> = {}
-          bookmarks.forEach(b => {
-            if (!b.key || !b.verseNumber || !b.id) return
-            RABBANA_META.filter(m => m.surah === b.key && m.ayah === b.verseNumber)
-              .forEach(m => { map[String(m.id)] = b.id })
-          })
           _bookmarkLastFetch = Date.now()
-          set({ bookmarkMap: map })
+          set({ bookmarkMap: buildBookmarkMap(bookmarks) })
         } catch { /* non-fatal — keep existing map */ }
       },
     }),
