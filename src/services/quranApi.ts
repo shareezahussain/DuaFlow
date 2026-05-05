@@ -12,7 +12,8 @@ const CLIENT_ID = import.meta.env.VITE_QURAN_CLIENT_ID ?? '';
 const OAUTH_URL     = import.meta.env.VITE_QURAN_OAUTH_URL     ?? '/api/token';
 const API_BASE      = import.meta.env.VITE_QURAN_API_BASE      ?? 'https://apis.quran.foundation/content/api/v4';
 
-// Translation resource IDs
+// Translation resource IDs — hardcoded from QF Content API resource list.
+// To find valid IDs: GET /content/api/v4/resources/translations
 const TRANSLATION_EN    = 85;   // M.A.S. Abdel Haleem (English)
 const TRANSLATION_UR    = 234;  // Fatah Muhammad Jalandhari (Urdu)
 const TRANSLATION_BN    = 161;  // Taisirul Quran — Tawheed Publication (Bengali)

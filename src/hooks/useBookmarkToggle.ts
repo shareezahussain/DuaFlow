@@ -57,10 +57,12 @@ export function useBookmarkToggle(
           try {
             await removeBookmark(userToken, bmId, refreshFn)
             useApp.getState().flagBookmarkDeleted(bmId)
-          } catch {
-            // DELETE failed — restore the bookmark in UI
+          } catch (e) {
             updateBookmarkMap(curr => ({ ...curr, [key]: bmId! }))
-            toast('Could not remove bookmark — please try again')
+            const msg = e instanceof Error ? e.message : ''
+            const status = parseInt(msg.match(/\d{3}/)?.[0] ?? '0')
+            if (status >= 400 && status < 500) useApp.getState().signOut()
+            else toast('Could not remove bookmark — please try again')
           }
         }
       } else {
@@ -68,10 +70,12 @@ export function useBookmarkToggle(
         try {
           const created = await addBookmark(userToken, dua.surah, dua.ayah, refreshFn)
           updateBookmarkMap(curr => ({ ...curr, [key]: created.id ?? 'local' }))
-        } catch {
-          // POST failed — remove the optimistic entry
+        } catch (e) {
           updateBookmarkMap(curr => { const { [key]: _, ...rest } = curr; return rest })
-          toast('Could not save bookmark — please try again')
+          const msg = e instanceof Error ? e.message : ''
+          const status = parseInt(msg.match(/\d{3}/)?.[0] ?? '0')
+          if (status >= 400 && status < 500) useApp.getState().signOut()
+          else toast('Could not save bookmark — please try again')
           return
         }
 

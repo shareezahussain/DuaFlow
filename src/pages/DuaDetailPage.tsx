@@ -15,6 +15,10 @@ import { decodeAudio } from '../util/decodeAudio'
 import { isIOS as deviceIsIOS, isMobileDevice, VIDEO_W, VIDEO_H } from '../util/deviceDetect'
 import { spawnVideoWorker } from '../util/spawnVideoWorker'
 
+// Reciter list is hardcoded because the QF Content API only exposes 2 recitations
+// (Husary id=6, Afasy id=7). The remaining reciters (Sudais, Shatri, Rifai, Shuraym)
+// are served via the quran.com CDN (verses.quran.com) using known folder-name paths
+// that are not returned by any API endpoint.
 const RECITERS = [
   { id: 'Alafasy',  name: 'Mishary Al Afasy' },
   { id: 'Shatri',   name: 'Abu Bakr Al Shatri' },
@@ -23,11 +27,15 @@ const RECITERS = [
   { id: 'Shuraym',  name: 'Saood Al Shuraym' },
 ]
 
-// Mapping from our reciter IDs to quran.com API recitation IDs (for word timestamps)
+// Maps our reciter folder-name IDs to quran.com API numeric recitation IDs used
+// for fetching word-level timestamps. Verified against api.quran.com/api/v4/resources/recitations.
+// QF Content API only has ids 6 & 7 — quran.com is used directly for the rest.
 const RECITATION_ID_MAP: Record<string, number> = {
   Alafasy: 7,
-  Shatri:  8,
-  Shuraym: 9,
+  Shatri:  4,
+  Sudais:  3,
+  Rifai:   5,
+  Shuraym: 10,
 }
 
 type WordTiming = { start: number; end: number }
@@ -45,6 +53,9 @@ function pad(n: number, len = 3) {
   return String(n).padStart(len, '0')
 }
 
+// Audio files are served from quran.com's public CDN using the reciter folder-name
+// as the path segment. This URL pattern is not returned by any API — it is a
+// well-known convention used by quran.com and its ecosystem.
 function getAudioUrl(surah: number, ayah: number, reciterId: string) {
   return `https://verses.quran.com/${reciterId}/mp3/${pad(surah)}${pad(ayah)}.mp3`
 }
@@ -136,6 +147,8 @@ export default function DuaDetailPage() {
     if (!recitationId) { wordTimingsRef.current = null; return }
 
     let cancelled = false
+    // Word timings use quran.com API directly — the QF Content API only exposes
+    // recitation ids 6 & 7, so it cannot serve timings for all 5 reciters.
     fetch(`https://api.quran.com/api/v4/recitations/${recitationId}/by_ayah/${dua.surah}:${dua.ayah}`)
       .then(r => r.json())
       .then(data => {
