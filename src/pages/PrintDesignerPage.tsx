@@ -5,11 +5,12 @@ import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import { sanitizeDuaFields, sanitizeSearchInput } from '../util/searchUtils'
 import { LANG_LABELS } from '../util/constants'
+import { uploadToImgbb, openTwitterShare, openPinterestShare } from '../util/imgbb'
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
 const FONT_SIZES = [{ l: 'S', v: 14 }, { l: 'M', v: 18 }, { l: 'L', v: 22 }]
-const FONT_WEIGHTS = [{ l: 'Normal', v: '400' }, { l: 'Bold', v: '700' }, { l: 'Heavy', v: '900' }]
+const FONT_WEIGHTS = [{ l: 'Normal', v: '400' }, { l: 'Bold', v: '700' }]
 const FONT_FAMILIES = [
   { l: 'Serif', v: "'Amiri', Georgia, serif" },
   { l: 'Sans', v: 'Arial, Helvetica, sans-serif' },
@@ -246,11 +247,10 @@ export default function PrintDesignerPage() {
 
   // ── Share ──────────────────────────────────────────────────────────────────
 
-  const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY ?? ''
   const [showSharePanel, setShowSharePanel] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
-  const hostedUrlRef = useRef<string | null>(null)
+  const hostedUrlRef = useRef<{ imageUrl: string; viewerUrl: string } | null>(null)
 
   // Invalidate cached hosted URL whenever the design changes (set after printHtml useMemo below)
 
@@ -273,38 +273,18 @@ export default function PrintDesignerPage() {
     }
   }
 
-  async function getHostedUrl(): Promise<string> {
-    if (hostedUrlRef.current) return hostedUrlRef.current
-    const blob = await captureAsBlob()
-    const base64 = await new Promise<string>(resolve => {
-      const reader = new FileReader()
-      reader.onload = () => resolve((reader.result as string).split(',')[1])
-      reader.readAsDataURL(blob)
-    })
-    const form = new FormData()
-    form.append('key', IMGBB_KEY)
-    form.append('image', base64)
-    const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: form })
-    if (!res.ok) throw new Error('imgbb upload failed')
-    const json = await res.json()
-    hostedUrlRef.current = json.data.url as string
-    return hostedUrlRef.current
-  }
-
   const handleShareImage = async (platform: SharePlatform) => {
     if (printCollection.length === 0) { setShareError('Add some duas first.'); return }
     setImageLoading(true)
     setShareError(null)
     try {
       if (platform === 'twitter' || platform === 'pinterest') {
-        const imgUrl = await getHostedUrl()
-        if (platform === 'twitter') {
-          const text = encodeURIComponent('Beautiful Quranic Supplication 🤲\n\n')
-          window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(imgUrl)}`, '_blank')
-        } else {
-          const desc = encodeURIComponent('DuaFlow — Quranic Supplication')
-          window.open(`https://pinterest.com/pin/create/button/?media=${encodeURIComponent(imgUrl)}&description=${desc}`, '_blank')
+        if (!hostedUrlRef.current) {
+          hostedUrlRef.current = await uploadToImgbb(await captureAsBlob())
         }
+        const { imageUrl, viewerUrl } = hostedUrlRef.current
+        if (platform === 'twitter') openTwitterShare('Beautiful Quranic Supplication 🤲\n\n', viewerUrl)
+        else openPinterestShare(imageUrl, 'DuaFlow — Quranic Supplication')
       } else {
         const blob = await captureAsBlob()
         const file = new File([blob], 'rabbana-dua.png', { type: 'image/png' })
@@ -358,7 +338,7 @@ export default function PrintDesignerPage() {
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
 <meta name="viewport" content="width=${pageMaxWidth}, initial-scale=1"/>
 <style>
-${withFonts ? "@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap');\n" : ''}
+${withFonts ? "@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap');\n" : ''}
 @page{size:A4 ${orientation};margin:0}
 *{margin:0;padding:0;box-sizing:border-box;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 html,body{height:100%}
@@ -369,10 +349,9 @@ body{font-family:${fontFamily};background:#fff;color:${translationColor};font-si
 .cover h2{font-size:${fontSize}px;opacity:.8;margin-top:6px;font-weight:normal}
 .bismillah{text-align:center;font-size:${fontSize + 6}px;color:${accent.v};margin-bottom:24px;direction:rtl;font-family:'Amiri',serif}
 .block{${blockCSS}padding:${blockPad};margin-bottom:${spacingGap}px;background:${blockBg};border-radius:${borderRadius}px;position:relative;page-break-inside:avoid}
-.num{position:absolute;top:-11px;left:${blockAccent === 'full-border' ? '10px' : '-3px'};background:${accent.v};color:${accent.t};width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold}
 .ref{font-size:${fontSize - 4}px;color:${accent.v};font-weight:bold;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
 .arabic{font-family:'Amiri',Georgia,serif;font-size:${fontSize + 8}px;line-height:2;color:${arabicColor};margin-bottom:8px;text-align:right;font-weight:${fontWeight}}
-.translit{font-size:${fontSize - 2}px;color:${translitColor};font-style:italic;margin-bottom:6px}
+.translit{font-size:${fontSize - 2}px;color:${translitColor};font-style:italic;font-weight:${fontWeight};margin-bottom:6px}
 .trans{font-size:${fontSize}px;color:${translationColor};line-height:1.8;font-weight:${fontWeight}}
 .footer{text-align:center;color:#aaa;font-size:11px;margin-top:36px;padding-top:16px;border-top:1px solid #eee}
 </style></head><body><div class="page">
