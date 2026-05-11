@@ -31,7 +31,6 @@ export interface EmojiOverlay {
 
 export interface DesignSettings {
   showBismillah: boolean;
-  showNumbers: boolean;
   orientation: "portrait" | "landscape";
   blockSpacing: string;
   blockBg: string;
@@ -52,7 +51,6 @@ export interface DesignSettings {
 
 export const DEFAULT_DESIGN: DesignSettings = {
   showBismillah: true,
-  showNumbers: true,
   orientation: "portrait",
   blockSpacing: "normal",
   blockBg: "#fafafa",

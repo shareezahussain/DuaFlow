@@ -5,5 +5,3 @@ export const isMobileDevice = /Android|iPad|iPhone|iPod/i.test(navigator.userAge
 // and text quality at 720p was unacceptably blurry due to H.264 compression
 export const VIDEO_W = 1080
 export const VIDEO_H = 1920
-// Keep for backwards compatibility where only one dimension was used
-export const VIDEO_CANVAS_SIZE = VIDEO_W

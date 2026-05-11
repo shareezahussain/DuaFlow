@@ -7,6 +7,7 @@ import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import Footer from '../components/Footer'
 import SignInModal from '../components/SignInModal'
 import { downloadVideoFile } from '../util/downloadVideo'
+import { uploadToImgbb, openTwitterShare, openPinterestShare } from '../util/imgbb'
 import { useBookmarkToggle } from '../hooks/useBookmarkToggle'
 import { LANG_LABELS } from '../util/constants'
 import { generateIOSVideo } from '../util/generateIOSVideo'
@@ -302,8 +303,11 @@ export default function DuaDetailPage() {
       const file = new File([blob], `rabbana-dua-${dua.id}.png`, { type: 'image/png' })
       if (platform === 'share' && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ title: `${dua.topic} — DuaFlow`, files: [file] })
-      } else if (platform === 'twitter') {
-        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${dua.topic} — Surah ${dua.surah}:${dua.ayah} 🤲 #Quran #Rabbana`)}`, '_blank')
+      } else if (platform === 'twitter' || platform === 'pinterest') {
+        const { imageUrl, viewerUrl } = await uploadToImgbb(blob)
+        const shareText = `${dua.topic} — Surah ${dua.surah}:${dua.ayah} 🤲 #Quran #Rabbana`
+        if (platform === 'twitter') openTwitterShare(shareText, viewerUrl)
+        else openPinterestShare(imageUrl, shareText)
       } else {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a'); a.href = url; a.download = `rabbana-dua-${dua.id}.png`
