@@ -46,6 +46,8 @@ export interface DesignSettings {
   borderRadius: number;
   borderColor: string;
   blockAccent: string;
+  contentAlignH: "left" | "center" | "right";
+  contentAlignV: "top" | "center" | "bottom";
   emojiOverlays: EmojiOverlay[];
 }
 
@@ -66,6 +68,8 @@ export const DEFAULT_DESIGN: DesignSettings = {
   borderRadius: 8,
   borderColor: "#1a5276",
   blockAccent: "left-bar",
+  contentAlignH: "center",
+  contentAlignV: "top",
   emojiOverlays: [],
 };
 
@@ -292,6 +296,16 @@ export const useApp = create<AppStore>()(
             ? async () => { const newToken = await refreshAccessToken(refreshToken); setUserToken(newToken); return newToken; }
             : undefined;
           const bookmarks = await fetchBookmarks(t, refreshFn);
+
+          // Prune _deletedIds entries the server has already dropped — confirms
+          // the deletion went through, so the ID can be safely re-bookmarked later
+          const serverIds = new Set(bookmarks.map(b => b.id))
+          let pruned = false
+          for (const id of _deletedIds) {
+            if (!serverIds.has(id)) { _deletedIds.delete(id); pruned = true }
+          }
+          if (pruned) saveDeletedIds(_deletedIds)
+
           set({ bookmarkMap: bookmarksToMap(bookmarks) });
         } catch (e) {
           // Sign out on any auth failure so the user sees the sign-in prompt

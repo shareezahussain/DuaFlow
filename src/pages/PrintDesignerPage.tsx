@@ -7,6 +7,8 @@ import { sanitizeDuaFields, sanitizeSearchInput } from '../util/searchUtils'
 import { LANG_LABELS } from '../util/constants'
 import { uploadToImgbb, openTwitterShare, openPinterestShare } from '../util/imgbb'
 
+const EMOJI_SIZE = 36
+
 // ── Option data ───────────────────────────────────────────────────────────────
 
 const FONT_SIZES = [{ l: 'S', v: 14 }, { l: 'M', v: 18 }, { l: 'L', v: 22 }]
@@ -158,37 +160,58 @@ function ColorDots({ colors, selected, onSelect }: { colors: string[]; selected:
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function PrintDesignerPage() {
-  const { printCollection, addToPrint, removeFromPrint, updatePrintItem, clearPrintCollection, language, setLanguage } = useApp()
+  const { printCollection, addToPrint, removeFromPrint, updatePrintItem, clearPrintCollection, language, setLanguage, design, setDesign } = useApp()
   const { duas } = useQuranContent()
 
   const [tab, setTab] = useState<'design' | 'preview'>('preview')
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
-
-  // ── Design settings from persisted store ──────────────────────────────────
-  const { design, setDesign } = useApp()
   const {
     showBismillah,
     orientation, blockSpacing, blockBg,
     fontSize, fontFamily, fontWeight,
     accent, arabicColor, translitColor, translationColor,
     borderStyle, borderWidth, borderRadius, borderColor, blockAccent,
+    contentAlignH, contentAlignV,
     emojiOverlays,
   } = design
+
+  const isLandscape = orientation === 'landscape'
+  const pageW = isLandscape ? 1000 : 700
+  const pageH = isLandscape ? 707 : 990
 
   // ── Emoji drag state (ephemeral — no need to persist) ─────────────────────
   const [isDragging, setIsDragging] = useState(false)
   const draggingRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
   const emojiAreaRef = useRef<HTMLDivElement>(null)
 
+  // ── Scale-to-fit preview — canvas is always exactly pageW × pageH ────────────
+  const previewContainerRef = useRef<HTMLDivElement>(null)
+  const [previewScale, setPreviewScale] = useState(1)
+  const previewScaleRef = useRef(1)
+
+  useEffect(() => { previewScaleRef.current = previewScale }, [previewScale])
+
+  useEffect(() => {
+    const el = previewContainerRef.current
+    if (!el) return
+    const compute = () => {
+      const availW = el.clientWidth
+      if (availW > 0) setPreviewScale(Math.min(availW / pageW, 1))
+    }
+    const ro = new ResizeObserver(compute)
+    ro.observe(el)
+    compute()
+    return () => ro.disconnect()
+  }, [pageW])
+
   function addEmoji(emoji: string) {
-    // Compute the new item outside the updater so the updater stays pure.
-    // StrictMode calls updater functions twice; impure updaters produce duplicates.
+    // Pixel coords in the fixed pageW × pageH canvas (single source of truth)
     const item: EmojiOverlay = {
       id: `${emoji}-${Date.now()}`,
       emoji,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
+      x: Math.round(pageW * (0.4 + Math.random() * 0.2)),
+      y: Math.round(pageH * (0.4 + Math.random() * 0.2)),
     }
     setDesign({ emojiOverlays: [...emojiOverlays, item] })
   }
@@ -218,14 +241,18 @@ export default function PrintDesignerPage() {
     if (!isDragging) return
 
     const move = (clientX: number, clientY: number) => {
-      if (!draggingRef.current || !emojiAreaRef.current) return
-      const rect = emojiAreaRef.current.getBoundingClientRect()
-      const dx = ((clientX - draggingRef.current.startX) / rect.width) * 100
-      const dy = ((clientY - draggingRef.current.startY) / rect.height) * 100
-      const nx = Math.max(0, Math.min(92, draggingRef.current.origX + dx))
-      const ny = Math.max(0, Math.min(92, draggingRef.current.origY + dy))
+      if (!draggingRef.current) return
+      const scale = previewScaleRef.current
+      const dx = (clientX - draggingRef.current.startX) / scale
+      const dy = (clientY - draggingRef.current.startY) / scale
+      const nx = Math.max(0, Math.min(pageW - EMOJI_SIZE, draggingRef.current.origX + dx))
+      const ny = Math.max(0, Math.min(pageH - EMOJI_SIZE, draggingRef.current.origY + dy))
+      const id = draggingRef.current.id
+      // useApp.getState() reads current overlays directly — no stale closure
       setDesign({
-        emojiOverlays: emojiOverlays.map(o => o.id === draggingRef.current?.id ? { ...o, x: nx, y: ny } : o)
+        emojiOverlays: useApp.getState().design.emojiOverlays.map(o =>
+          o.id === id ? { ...o, x: nx, y: ny } : o
+        )
       })
     }
 
@@ -256,21 +283,33 @@ export default function PrintDesignerPage() {
 
   async function captureAsBlob(): Promise<Blob> {
     const h2c = (await import('html2canvas')).default
-    const width = orientation === 'landscape' ? 1000 : 700
-    const bodyMatch = printHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
-    const styleMatch = printHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i)
-    const div = document.createElement('div')
-    div.style.cssText = `position:fixed;left:-9999px;top:0;width:${width}px;background:#fff;`
-    div.innerHTML = (styleMatch ? `<style>${styleMatch[1]}</style>` : '') + (bodyMatch ? bodyMatch[1] : '')
-    document.body.appendChild(div)
-    try {
-      const canvas = await h2c(div, { scale: 2, useCORS: true, backgroundColor: '#fff', width, windowWidth: width })
-      return await new Promise<Blob>((res, rej) =>
-        canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png', 1)
-      )
-    } finally {
-      document.body.removeChild(div)
-    }
+    // Hidden iframe gives printHtml the same document context as the print window —
+    // body selectors, @font-face and @media rules all apply correctly.
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${pageW}px;height:${pageH}px;border:none;visibility:hidden;`
+    document.body.appendChild(iframe)
+    return new Promise<Blob>((resolve, reject) => {
+      iframe.onload = async () => {
+        try {
+          const doc = iframe.contentDocument!
+          // Wait for fonts to finish loading so layout matches the preview
+          await doc.fonts?.ready
+          const canvas = await h2c(doc.body, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#fff',
+            width: pageW,
+            height: pageH,
+          })
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png', 1)
+        } catch (e) {
+          reject(e)
+        } finally {
+          document.body.removeChild(iframe)
+        }
+      }
+      iframe.srcdoc = printHtml
+    })
   }
 
   const handleShareImage = async (platform: SharePlatform) => {
@@ -328,49 +367,61 @@ export default function PrintDesignerPage() {
       return `<div class="block">${parts.join('')}</div>`
     }).join('')
 
-    const isLandscape = orientation === 'landscape'
-    const pageMaxWidth = isLandscape ? 1000 : 700
-
     const bodyItems = printCollection.length === 0
       ? `<p style="color:#999;text-align:center;padding:40px 0">Add duas from the list to see them here.</p>`
       : items
 
+    // Emojis use pixel coords in the fixed pageW × pageH canvas — same coordinate space
+    // as the preview overlay, so positions are identical between preview and print.
+    const emojiLayerHtml = withEmojis && emojiOverlays.length > 0
+      ? `<div style="position:absolute;inset:0;pointer-events:none;z-index:100;">${
+          emojiOverlays.map(({ emoji, x, y }) =>
+            `<span style="position:absolute;left:${Math.round(x)}px;top:${Math.round(y)}px;font-size:${EMOJI_SIZE}px;line-height:1;">${emoji}</span>`
+          ).join('')
+        }</div>`
+      : ''
+
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
-<meta name="viewport" content="width=${pageMaxWidth}, initial-scale=1"/>
+<title></title>
+<base href="${window.location.origin}/">
+<meta name="viewport" content="width=${pageW}, initial-scale=1"/>
 <style>
-${withFonts ? "@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap');\n" : ''}
-@page{size:A4 ${orientation};margin:0}
+${withFonts ? `@font-face{font-family:'Amiri';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/amiri-400-arabic.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:'Amiri';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/amiri-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+FEFF,U+FFFD}
+@font-face{font-family:'Amiri';font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/amiri-700-arabic.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:'Amiri';font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/amiri-700-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+FEFF,U+FFFD}
+@font-face{font-family:'Amiri';font-style:italic;font-weight:400;font-display:swap;src:url(/fonts/amiri-400i-arabic.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:'Amiri';font-style:italic;font-weight:400;font-display:swap;src:url(/fonts/amiri-400i-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+FEFF,U+FFFD}
+@font-face{font-family:'Amiri';font-style:italic;font-weight:700;font-display:swap;src:url(/fonts/amiri-700i-arabic.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:'Amiri';font-style:italic;font-weight:700;font-display:swap;src:url(/fonts/amiri-700i-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+FEFF,U+FFFD}\n` : ''}
+@page{size:${pageW}px ${pageH}px;margin:0}
 *{margin:0;padding:0;box-sizing:border-box;print-color-adjust:exact;-webkit-print-color-adjust:exact}
-html,body{height:100%}
-body{font-family:${fontFamily};background:#fff;color:${translationColor};font-size:${fontSize}px;font-weight:${fontWeight};display:flex;align-items:flex-start;justify-content:center;min-height:100%;padding:36px 0}
-.page{width:100%;max-width:${pageMaxWidth}px;padding:36px;position:relative}
-.cover{background:${accent.v};color:${accent.t};padding:36px 24px;border-radius:10px;margin-bottom:32px;text-align:center;${borderStyle !== 'none' ? `border:${borderWidth}px ${borderStyle} ${borderColor};` : ''}}
-.cover h1{font-size:${fontSize + 12}px;font-weight:${fontWeight}}
-.cover h2{font-size:${fontSize}px;opacity:.8;margin-top:6px;font-weight:normal}
+@media screen{html{min-height:100vh;background:#fff;display:flex;justify-content:center;padding:0;box-sizing:border-box}body{width:${pageW}px;min-height:${pageH}px;overflow:visible;flex-shrink:0;align-self:flex-start}}
+@media print{html,body{width:100%;height:100%;overflow:visible;background:#fff;box-shadow:none}}
+body{font-family:${fontFamily};background:#fff;color:${translationColor};font-size:${fontSize}px;font-weight:${fontWeight};position:relative;display:flex;align-items:${{ top: 'flex-start', center: 'center', bottom: 'flex-end' }[contentAlignV]};justify-content:${{ left: 'flex-start', center: 'center', right: 'flex-end' }[contentAlignH]};padding:36px;box-sizing:border-box}
+.page{width:${pageW}px;padding:36px}
 .bismillah{text-align:center;font-size:${fontSize + 6}px;color:${accent.v};margin-bottom:24px;direction:rtl;font-family:'Amiri',serif}
-.block{${blockCSS}padding:${blockPad};margin-bottom:${spacingGap}px;background:${blockBg};border-radius:${borderRadius}px;position:relative;page-break-inside:avoid}
+.block{${blockCSS}padding:${blockPad};margin-bottom:${spacingGap}px;background:${blockBg};border-radius:${borderRadius}px;page-break-inside:avoid}
 .ref{font-size:${fontSize - 4}px;color:${accent.v};font-weight:bold;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
 .arabic{font-family:'Amiri',Georgia,serif;font-size:${fontSize + 8}px;line-height:2;color:${arabicColor};margin-bottom:8px;text-align:right;font-weight:${fontWeight}}
 .translit{font-size:${fontSize - 2}px;color:${translitColor};font-style:italic;font-weight:${fontWeight};margin-bottom:6px}
 .trans{font-size:${fontSize}px;color:${translationColor};line-height:1.8;font-weight:${fontWeight}}
-.footer{text-align:center;color:#aaa;font-size:11px;margin-top:36px;padding-top:16px;border-top:1px solid #eee}
-</style></head><body><div class="page">
-${withEmojis ? emojiOverlays.map(({ emoji, x, y }) =>
-      `<span style="position:absolute;left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;font-size:36px;line-height:1;pointer-events:none;z-index:5;">${emoji}</span>`
-    ).join('') : ''}
+</style></head><body>
+${emojiLayerHtml}
+<div class="page">
 ${showBismillah ? `<div class="bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>` : ''}
 ${bodyItems}
 </div></body></html>`
   }
 
-  const designDeps = [printCollection, language, showBismillah, fontSize, fontFamily, fontWeight, accent, arabicColor, translitColor, translationColor, borderStyle, borderWidth, borderColor, borderRadius, blockAccent, orientation, blockSpacing, blockBg]
+  const designDeps = [printCollection, language, showBismillah, fontSize, fontFamily, fontWeight, accent, arabicColor, translitColor, translationColor, borderStyle, borderWidth, borderColor, borderRadius, blockAccent, contentAlignH, contentAlignV, orientation, blockSpacing, blockBg]
   const printDeps = [...designDeps, emojiOverlays]
 
 
-  // Preview iframe never includes emojis — the overlay spans in the designer handle them,
-  // avoiding a visual duplicate while dragging.
+  // Preview loads the same Amiri font as print so Arabic layout is identical.
+  // Emojis are excluded — the overlay spans in the designer handle them visually.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const previewHtml = useMemo(() => buildHtml(false, false), designDeps)
+  const previewHtml = useMemo(() => buildHtml(true, false), designDeps)
   // Print / export HTML bakes emojis in at their final positions.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const printHtml = useMemo(() => buildHtml(true, true), printDeps)
@@ -427,6 +478,12 @@ ${bodyItems}
         <Chips items={ORIENTATION_OPTIONS} selected={orientation} onSelect={v => setDesign({ orientation: v as 'portrait' | 'landscape' })} />
         {subTitle("Block spacing")}
         <Chips items={SPACING_OPTIONS} selected={blockSpacing} onSelect={v => setDesign({ blockSpacing: v as string })} />
+        {subTitle("Vertical align")}
+        <Chips
+          items={[{ l: '↑', v: 'top' }, { l: '↕', v: 'center' }, { l: '↓', v: 'bottom' }]}
+          selected={contentAlignV}
+          onSelect={v => setDesign({ contentAlignV: v as 'top' | 'center' | 'bottom' })}
+        />
         {subTitle("Block background")}
         <ColorDots colors={BLOCK_BG_COLORS} selected={blockBg} onSelect={v => setDesign({ blockBg: v })} />
       </div>
@@ -527,7 +584,7 @@ ${bodyItems}
       <div className="bg-white rounded-xl p-3 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-extrabold text-green uppercase tracking-wider">
-            Duas ({printCollection.length})
+            Duas ({printCollection.length}/{2})
           </p>
           <div className="flex gap-2">
             {printCollection.length > 0 && (
@@ -540,12 +597,22 @@ ${bodyItems}
             )}
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="text-xs text-white bg-green px-3 py-1 rounded-full hover:bg-green-light"
+              disabled={printCollection.length >= (2)}
+              className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                printCollection.length >= (2)
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-green text-white hover:bg-green-light'
+              }`}
             >
               + Add
             </button>
           </div>
         </div>
+        {printCollection.length >= (2) && (
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-3">
+            Page limit reached. Remove a dua to add another.
+          </p>
+        )}
 
         {showSearch && (
           <div className="mb-3">
@@ -560,7 +627,7 @@ ${bodyItems}
             {filteredDuas.slice(0, 6).map(dua => (
               <button
                 key={dua.id}
-                onClick={() => { addToPrint(dua); setSearch(''); setShowSearch(false) }}
+                onClick={() => { if (printCollection.length < (2)) { addToPrint(dua); setSearch(''); setShowSearch(false) } }}
                 className="w-full flex items-center gap-2 py-2 border-b border-gray-100 hover:bg-gray-50 text-left"
               >
                 <span
@@ -626,51 +693,80 @@ ${bodyItems}
     </div>
   )
 
+  // Canvas is always exactly pageW × pageH — the single source of truth for emoji coords
+  const scaledW = Math.round(pageW * previewScale)
+  const scaledH = Math.round(pageH * previewScale)
+
   const previewJsx = (
-    <div className="flex flex-col h-full bg-surface">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-white">
+    <div className="flex flex-col h-full">
+      {/* Preview toolbar */}
+      <div className="flex items-center justify-between px-4 py-2 bg-white shrink-0">
         <p className="text-green text-xs font-bold uppercase tracking-wider">Live Preview</p>
-        <div className="flex items-center gap-3">
-          {emojiOverlays.length > 0 && (
-            <span className="text-gray-400 text-xs">{emojiOverlays.length} emoji{emojiOverlays.length !== 1 ? 's' : ''}</span>
+        <div className="flex items-center gap-3 text-xs text-gray-400">
+          <span>{isLandscape ? 'A4 Landscape' : 'A4 Portrait'}</span>
+          {previewScale < 0.99 && <span>{Math.round(previewScale * 100)}%</span>}
+{emojiOverlays.length > 0 && (
+            <span>{emojiOverlays.length} emoji{emojiOverlays.length !== 1 ? 's' : ''}</span>
           )}
         </div>
       </div>
-      <div className="flex-1 overflow-hidden">
-        <div
-          ref={emojiAreaRef}
-          className="relative bg-white h-full w-full overflow-hidden"
-        >
-          <iframe
-            srcDoc={previewHtml}
-            title="Print Preview"
-            className="w-full h-full border-none"
-            style={{ pointerEvents: isDragging ? 'none' : 'auto' }}
-          />
-          {/* Draggable emoji overlay */}
-          {emojiOverlays.map(item => (
-            <span
-              key={item.id}
-              title="Drag to move · Double-click to remove"
+
+      {/* Canvas area — fills the pane, no grey surround, vertical scroll only */}
+      <div
+        ref={previewContainerRef}
+        className="flex-1 flex items-start justify-center"
+        style={{ overflowY: 'auto', overflowX: 'hidden', background: '#fff', WebkitOverflowScrolling: 'touch' }}
+      >
+        <div style={{ width: scaledW, height: scaledH, position: 'relative', flexShrink: 0, overflow: 'hidden' }}>
+          {/* Inner canvas: full unscaled pageW × pageH, scaled uniformly.
+              Emoji overlay shares this coordinate space exactly with the print HTML. */}
+          <div
+            style={{
+              width: pageW,
+              height: pageH,
+              position: 'relative',
+              transformOrigin: 'top left',
+              transform: `scale(${previewScale})`,
+            }}
+          >
+            <iframe
+              srcDoc={previewHtml}
+              title="Print Preview"
               style={{
+                width: pageW,
+                height: pageH,
+                border: 'none',
+                display: 'block',
                 position: 'absolute',
-                left: `${item.x}%`,
-                top: `${item.y}%`,
-                fontSize: '36px',
-                lineHeight: 1,
-                cursor: draggingRef.current?.id === item.id ? 'grabbing' : 'grab',
-                userSelect: 'none',
-                zIndex: 20,
-                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
+                inset: 0,
+                pointerEvents: isDragging ? 'none' : 'auto',
               }}
-              onMouseDown={e => onEmojiMouseDown(e, item.id)}
-              onTouchStart={e => onEmojiTouchStart(e, item.id)}
-              onDoubleClick={() => setDesign({ emojiOverlays: emojiOverlays.filter(o => o.id !== item.id) })}
-              onTouchEnd={e => { if (e.changedTouches.length && e.target) { /* tap to remove on long press handled by double tap */ } }}
-            >
-              {item.emoji}
-            </span>
-          ))}
+            />
+            {/* Emoji drag layer — pixel coords match print HTML exactly */}
+            <div ref={emojiAreaRef} style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+              {emojiOverlays.map(item => (
+                <span
+                  key={item.id}
+                  title="Drag to move · Double-click to remove"
+                  style={{
+                    position: 'absolute',
+                    left: `${item.x}px`,
+                    top: `${item.y}px`,
+                    fontSize: `${EMOJI_SIZE}px`,
+                    lineHeight: 1,
+                    cursor: isDragging && draggingRef.current?.id === item.id ? 'grabbing' : 'grab',
+                    userSelect: 'none',
+                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.35))',
+                  }}
+                  onMouseDown={e => onEmojiMouseDown(e, item.id)}
+                  onTouchStart={e => onEmojiTouchStart(e, item.id)}
+                  onDoubleClick={() => setDesign({ emojiOverlays: emojiOverlays.filter(o => o.id !== item.id) })}
+                >
+                  {item.emoji}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
