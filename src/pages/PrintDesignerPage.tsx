@@ -319,6 +319,8 @@ export default function PrintDesignerPage() {
 
   const handleShareImage = async (platform: SharePlatform) => {
     if (printCollection.length === 0) { setShareError('Add some duas first.'); return }
+    // Open popup synchronously before any await — mobile browsers block window.open() after async gaps
+    const popup = (platform === 'twitter' || platform === 'pinterest') ? window.open('', '_blank') : null
     setImageLoading(true)
     setShareError(null)
     try {
@@ -327,8 +329,8 @@ export default function PrintDesignerPage() {
           hostedUrlRef.current = await uploadToImgbb(await captureAsBlob())
         }
         const { imageUrl, viewerUrl } = hostedUrlRef.current
-        if (platform === 'twitter') openTwitterShare('Beautiful Quranic Supplication 🤲\n\n', viewerUrl)
-        else openPinterestShare(imageUrl, 'DuaFlow — Quranic Supplication')
+        if (platform === 'twitter') openTwitterShare('Beautiful Quranic Supplication 🤲\n\n', viewerUrl, popup)
+        else openPinterestShare(imageUrl, 'DuaFlow — Quranic Supplication', popup)
       } else {
         const blob = await captureAsBlob()
         const file = new File([blob], 'rabbana-dua.png', { type: 'image/png' })
