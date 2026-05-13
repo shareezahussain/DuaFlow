@@ -51,6 +51,8 @@ export interface DesignSettings {
   emojiOverlays: EmojiOverlay[];
 }
 
+export const MAX_PRINT_DUAS = 2;
+
 export const DEFAULT_DESIGN: DesignSettings = {
   showBismillah: true,
   orientation: "portrait",
@@ -165,6 +167,8 @@ export const useApp = create<AppStore>()(
       addToPrint: (dua) =>
         set((state) => {
           if (state.printCollection.find((item) => item.dua.id === dua.id))
+            return state;
+          if (state.printCollection.length >= MAX_PRINT_DUAS)
             return state;
           return {
             printCollection: [

@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import HomeButton from '../components/HomeButton'
-import { useApp, type Language, type EmojiOverlay } from '../context/AppContext'
+import { useApp, DEFAULT_DESIGN, MAX_PRINT_DUAS, type Language, type EmojiOverlay } from '../context/AppContext'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
+import ConfirmModal from '../components/ConfirmModal'
 import { sanitizeDuaFields, sanitizeSearchInput } from '../util/searchUtils'
 import { LANG_LABELS } from '../util/constants'
 import { uploadToImgbb, openTwitterShare, openPinterestShare } from '../util/imgbb'
@@ -160,12 +161,13 @@ function ColorDots({ colors, selected, onSelect }: { colors: string[]; selected:
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function PrintDesignerPage() {
-  const { printCollection, addToPrint, removeFromPrint, updatePrintItem, clearPrintCollection, language, setLanguage, design, setDesign } = useApp()
+  const { printCollection, addToPrint, removeFromPrint, updatePrintItem, clearPrintCollection, language, setLanguage, design, setDesign, resetDesign } = useApp()
   const { duas } = useQuranContent()
 
   const [tab, setTab] = useState<'design' | 'preview'>('preview')
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
   const {
     showBismillah,
     orientation, blockSpacing, blockBg,
@@ -189,8 +191,11 @@ export default function PrintDesignerPage() {
   const previewContainerRef = useRef<HTMLDivElement>(null)
   const [previewScale, setPreviewScale] = useState(1)
   const previewScaleRef = useRef(1)
+  const [contentH, setContentH] = useState(pageH)
 
   useEffect(() => { previewScaleRef.current = previewScale }, [previewScale])
+
+  useEffect(() => { setContentH(pageH) }, [pageH])
 
   useEffect(() => {
     const el = previewContainerRef.current
@@ -459,6 +464,8 @@ ${bodyItems}
     <p className="text-xs text-gray-400 font-semibold mt-3 mb-1.5">{title}</p>
   )
 
+  const isDefaultDesign = JSON.stringify({ ...design, emojiOverlays: [] }) === JSON.stringify({ ...DEFAULT_DESIGN, emojiOverlays: [] })
+
   const settingsJsx = (
     <div className="overflow-y-auto h-full p-3 space-y-3">
 
@@ -589,8 +596,8 @@ ${bodyItems}
           <div className="flex gap-2">
             {printCollection.length > 0 && (
               <button
-                onClick={() => { if (confirm('Clear all duas?')) clearPrintCollection() }}
-                className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded-full hover:bg-red-50"
+                onClick={() => setConfirmModal({ title: 'Clear all duas?', message: 'This will remove all duas from your print collection.', onConfirm: clearPrintCollection })}
+                className="text-xs text-green border border-green-200 px-2 py-1 rounded-full hover:bg-red-50"
               >
                 Clear
               </button>
@@ -627,7 +634,7 @@ ${bodyItems}
             {filteredDuas.slice(0, 6).map(dua => (
               <button
                 key={dua.id}
-                onClick={() => { if (printCollection.length < (2)) { addToPrint(dua); setSearch(''); setShowSearch(false) } }}
+                onClick={() => { if (printCollection.length < MAX_PRINT_DUAS) { addToPrint(dua); setSearch(''); setShowSearch(false) } }}
                 className="w-full flex items-center gap-2 py-2 border-b border-gray-100 hover:bg-gray-50 text-left"
               >
                 <span
@@ -689,13 +696,28 @@ ${bodyItems}
         )}
       </div>
 
+      {/* Reset styles */}
+      <div className="bg-white rounded-xl p-3 shadow-sm">
+        <button
+          disabled={isDefaultDesign}
+          onClick={() => setConfirmModal({ title: 'Reset styles?', message: 'All design settings will return to their defaults. Your duas will not be affected.', onConfirm: resetDesign })}
+          className={`w-full py-2 rounded-lg text-xs font-semibold border transition-colors ${
+            isDefaultDesign
+              ? 'text-gray-300 border-gray-100 cursor-not-allowed'
+              : 'text-green-dark border-green/30 hover:bg-green/5'
+          }`}
+        >
+          Reset styles to default
+        </button>
+      </div>
+
       <div className="h-4" />
     </div>
   )
 
   // Canvas is always exactly pageW × pageH — the single source of truth for emoji coords
   const scaledW = Math.round(pageW * previewScale)
-  const scaledH = Math.round(pageH * previewScale)
+  const scaledH = Math.round(contentH * previewScale)
 
   const previewJsx = (
     <div className="flex flex-col h-full">
@@ -711,6 +733,13 @@ ${bodyItems}
         </div>
       </div>
 
+      {/* Overflow warning — only shown when content spills past the page boundary */}
+      {contentH > pageH && (
+        <div className="mx-3 mb-1 shrink-0 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-700">
+          Overflow content will be cut off when printing or exporting — reduce font size or spacing to fit.
+        </div>
+      )}
+
       {/* Canvas area — fills the pane, no grey surround, vertical scroll only */}
       <div
         ref={previewContainerRef}
@@ -723,7 +752,7 @@ ${bodyItems}
           <div
             style={{
               width: pageW,
-              height: pageH,
+              height: contentH,
               position: 'relative',
               transformOrigin: 'top left',
               transform: `scale(${previewScale})`,
@@ -732,9 +761,15 @@ ${bodyItems}
             <iframe
               srcDoc={previewHtml}
               title="Print Preview"
+              onLoad={e => {
+                const body = (e.currentTarget as HTMLIFrameElement).contentDocument?.body
+                if (!body) return
+                const measured = body.scrollHeight
+                setContentH(measured > pageH + 10 ? measured : pageH)
+              }}
               style={{
                 width: pageW,
-                height: pageH,
+                height: contentH,
                 border: 'none',
                 display: 'block',
                 position: 'absolute',
@@ -875,6 +910,16 @@ ${bodyItems}
         </button>
 
       </div>
+
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel="Yes, proceed"
+          onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(null) }}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   )
 }

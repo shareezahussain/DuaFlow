@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import HomeButton from '../components/HomeButton'
-import { useApp } from '../context/AppContext'
+import { useApp, MAX_PRINT_DUAS } from '../context/AppContext'
+import { toast } from '../util/toast'
 import { useQuranContent } from '../context/QuranContentContext'
 import SharePanel, { type SharePlatform } from '../components/SharePanel'
 import Footer from '../components/Footer'
@@ -99,7 +100,7 @@ function buildPrintHtml(d: { id: number; surah: number; ayah: number; topic: str
 export default function DuaDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { language, setLanguage, addToPrint } = useApp()
+  const { language, setLanguage, addToPrint, printCollection, isInPrint } = useApp()
   const { duas, isLoading } = useQuranContent()
 
   const dua = duas.find(d => d.id === Number(id))
@@ -632,7 +633,12 @@ export default function DuaDetailPage() {
         {/* Action row */}
         <div className="flex gap-3">
           <button
-            onClick={() => { addToPrint(dua); navigate('/print') }}
+            onClick={() => {
+              if (!isInPrint(dua.id) && printCollection.length >= MAX_PRINT_DUAS) {
+                toast('Page limit reached — remove a dua to add another')
+              }
+              addToPrint(dua); navigate('/print')
+            }}
             className="flex-1 py-4 rounded-2xl bg-green-dark hover:bg-green text-white font-bold text-sm transition-colors"
           >
             🎨 Design &amp; Print

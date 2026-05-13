@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { Dua } from '../data/rabbanas'
-import { useApp } from '../context/AppContext'
+import { useApp, MAX_PRINT_DUAS } from '../context/AppContext'
+import { toast } from '../util/toast'
 import { useBookmarkToggle } from '../hooks/useBookmarkToggle'
 import { LANG_LABELS, type Lang } from '../util/constants'
 
@@ -14,9 +15,11 @@ interface Props {
 }
 
 export default function DuaPreviewModal({ dua, onClose, onSignIn }: Props) {
-  const { language, addToPrint, removeFromPrint, isInPrint } = useApp()
+  const navigate = useNavigate()
+  const { language, addToPrint, removeFromPrint, isInPrint, printCollection } = useApp()
   const [lang, setLang] = useState<Lang>(language)
   const inPrint = isInPrint(dua.id)
+  const printFull = !inPrint && printCollection.length >= MAX_PRINT_DUAS
   const { isBookmarked: bm, isLoading: bmLoading, showSparkle, toggle: toggleBookmark } = useBookmarkToggle(dua, onSignIn)
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleId = `dua-modal-${dua.id}`
@@ -126,7 +129,11 @@ export default function DuaPreviewModal({ dua, onClose, onSignIn }: Props) {
         {/* Actions */}
         <div className="flex gap-2 px-5 py-4 border-t border-gray-100 shrink-0">
           <button
-            onClick={() => { inPrint ? removeFromPrint(dua.id) : addToPrint(dua) }}
+            onClick={() => {
+              if (inPrint) { removeFromPrint(dua.id) }
+              else if (printFull) { toast('Page limit reached — remove a dua to add another'); navigate('/print') }
+              else { addToPrint(dua) }
+            }}
             className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${
               inPrint
                 ? 'bg-green text-white border-green'
