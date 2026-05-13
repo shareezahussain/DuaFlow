@@ -27,10 +27,12 @@ export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
       onClick={onPreview}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview() } }}
     >
-      <div
+      <img
+        src="/dua-card-bg.svg"
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{ backgroundImage: 'url(/dua-card-bg.svg)', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' }}
+        fetchPriority="low"
+        loading="lazy"
+        className="pointer-events-none absolute inset-0 w-full h-full object-contain opacity-[0.04]"
       />
 
       <div className="flex items-center gap-2 mb-3">
