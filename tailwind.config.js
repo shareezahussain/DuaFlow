@@ -18,7 +18,7 @@ export default {
       },
       fontFamily: {
         arabic: ['Amiri', 'Georgia', 'serif'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['system-ui', '-apple-system', 'sans-serif'],
       },
     },
   },
