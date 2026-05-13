@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { Dua } from '../data/rabbanas'
-import { useApp } from '../context/AppContext'
+import { useApp, MAX_PRINT_DUAS } from '../context/AppContext'
 import { useBookmarkToggle } from '../hooks/useBookmarkToggle'
 import { toast } from '../util/toast'
 
@@ -11,10 +11,12 @@ interface DuaCardProps {
 }
 
 export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
-  const { language, addToPrint, removeFromPrint, isInPrint } = useApp()
+  const navigate = useNavigate()
+  const { language, addToPrint, removeFromPrint, isInPrint, printCollection } = useApp()
   const { isBookmarked: bm, isLoading: bmLoading, showSparkle, toggle: toggleBookmark } = useBookmarkToggle(dua, onSignIn)
 
   const inPrint = isInPrint(dua.id)
+  const printFull = !inPrint && printCollection.length >= MAX_PRINT_DUAS
 
   return (
     <div
@@ -28,6 +30,8 @@ export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
       <img
         src="/dua-card-bg.svg"
         aria-hidden="true"
+        fetchPriority="low"
+        loading="lazy"
         className="pointer-events-none absolute inset-0 w-full h-full object-contain opacity-[0.04]"
       />
 
@@ -87,7 +91,11 @@ export default function DuaCard({ dua, onSignIn, onPreview }: DuaCardProps) {
 
       <div className="flex gap-2" onClick={e => e.stopPropagation()}>
         <button
-          onClick={() => { if (inPrint) { removeFromPrint(dua.id) } else { addToPrint(dua); toast('Added to print collection ✓') } }}
+          onClick={() => {
+            if (inPrint) { removeFromPrint(dua.id) }
+            else if (printFull) { toast('Page limit reached — remove a dua to add another'); navigate('/print') }
+            else { addToPrint(dua); toast('Added to print collection ✓') }
+          }}
           aria-label={inPrint ? 'Remove from print collection' : 'Add to print collection'}
           className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
             inPrint

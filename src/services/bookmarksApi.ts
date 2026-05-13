@@ -215,7 +215,8 @@ export async function fetchBookmarks(token: string, refreshFn?: () => Promise<st
     if (after) query.set('after', after);
 
     const resp = await authFetch(`${BOOKMARKS_URL}?${query}`, {
-      headers: { 'Cache-Control': 'no-cache' },
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
     }, token, refreshFn);
 
     if (resp.status === 304) break;
