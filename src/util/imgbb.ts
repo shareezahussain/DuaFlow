@@ -27,17 +27,15 @@ export async function uploadToImgbb(blob: Blob): Promise<ImgbbResult> {
   return { imageUrl, viewerUrl }
 }
 
-export function openTwitterShare(text: string, viewerUrl: string) {
-  window.open(
-    `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(viewerUrl)}`,
-    '_blank'
-  )
+export function openTwitterShare(text: string, viewerUrl: string, target?: Window | null) {
+  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(viewerUrl)}`
+  if (target) target.location.href = url
+  else window.open(url, '_blank')
 }
 
-export function openPinterestShare(imageUrl: string, description: string) {
+export function openPinterestShare(imageUrl: string, description: string, target?: Window | null) {
   // url parameter required — without it browsers download the image instead of opening Pinterest compose
-  window.open(
-    `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(window.location.href)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(description)}`,
-    '_blank'
-  )
+  const url = `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(window.location.href)}&media=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(description)}`
+  if (target) target.location.href = url
+  else window.open(url, '_blank')
 }

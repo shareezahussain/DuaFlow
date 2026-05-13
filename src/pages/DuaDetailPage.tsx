@@ -288,6 +288,8 @@ export default function DuaDetailPage() {
   const progress = duration > 0 ? position / duration : 0
 
   const handleSharePng = async (platform: SharePlatform) => {
+    // Open popup synchronously before any await — mobile browsers block window.open() after async gaps
+    const popup = (platform === 'twitter' || platform === 'pinterest') ? window.open('', '_blank') : null
     setPngLoading(true)
     try {
       const h2c = (await import('html2canvas')).default
@@ -307,8 +309,8 @@ export default function DuaDetailPage() {
       } else if (platform === 'twitter' || platform === 'pinterest') {
         const { imageUrl, viewerUrl } = await uploadToImgbb(blob)
         const shareText = `${dua.topic} — Surah ${dua.surah}:${dua.ayah} 🤲 #Quran #Rabbana`
-        if (platform === 'twitter') openTwitterShare(shareText, viewerUrl)
-        else openPinterestShare(imageUrl, shareText)
+        if (platform === 'twitter') openTwitterShare(shareText, viewerUrl, popup)
+        else openPinterestShare(imageUrl, shareText, popup)
       } else {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a'); a.href = url; a.download = `rabbana-dua-${dua.id}.png`
